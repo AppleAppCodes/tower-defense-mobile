@@ -3,6 +3,7 @@ import GameCanvas from './components/GameCanvas';
 
 const App: React.FC = () => {
   const [highScore, setHighScore] = useState(0);
+  const [appHeight, setAppHeight] = useState('100vh');
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -22,6 +23,18 @@ const App: React.FC = () => {
       // Notify Telegram that the app is initialized and ready to be shown
       tg.ready();
     }
+
+    // Dynamic viewport height fix for mobile browsers/webviews
+    const handleResize = () => {
+      // Use window.innerHeight to get the actual visible area
+      setAppHeight(`${window.innerHeight}px`);
+    };
+
+    // Set initial height
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleGameOver = (wave: number) => {
@@ -31,9 +44,11 @@ const App: React.FC = () => {
   };
 
   return (
-    // Use h-[100vh] to force full viewport height, crucial for Telegram Web Apps
-    // added touch-none to body in index.html, but reinforcing here for the container
-    <div className="h-[100vh] w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none">
+    // Replaced h-[100vh] with style={{ height: appHeight }} to strictly respect the visible window size
+    <div 
+      style={{ height: appHeight }} 
+      className="w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none"
+    >
       <GameCanvas onGameOver={handleGameOver} />
     </div>
   );

@@ -490,7 +490,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         )}
       </div>
 
-      <div className="flex-1 flex flex-col gap-2 lg:gap-4 overflow-y-auto pb-4 lg:pb-0">
+      <div className="flex-1 flex flex-col gap-2 lg:gap-4 overflow-y-auto pb-24 lg:pb-0">
         <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex flex-col gap-2 lg:gap-4">
             <div className="flex justify-between items-center">
                 <div className="flex flex-col">
