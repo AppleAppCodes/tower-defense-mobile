@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PATH_WAYPOINTS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE } from '../constants';
 import { getTacticalAdvice } from '../services/geminiService';
-import { Zap, Heart, Coins, Shield, Bot, Play, RefreshCw, Info } from 'lucide-react';
+import { Zap, Heart, Coins, Shield, Bot, Play, RefreshCw, Info, Rocket } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -50,7 +50,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mousePosRef = useRef<Vector2D | null>(null);
   
-  // Mutable Game State
   const gameStateRef = useRef<GameState>({
     money: 120,
     lives: 20,
@@ -65,20 +64,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   
-  // UI State
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
-  const [advisorMessage, setAdvisorMessage] = useState<string>("Welcome Commander. Systems online.");
+  const [advisorMessage, setAdvisorMessage] = useState<string>("Welcome Commander. Build turrets to defend the path.");
   const [isAdvisorLoading, setIsAdvisorLoading] = useState(false);
   const [spawnQueue, setSpawnQueue] = useState<{ type: EnemyType; delay: number }[]>([]);
-  
-  // Telegram User Data
   const [userName, setUserName] = useState<string>("");
 
-  // Helpers
   const distance = (a: Vector2D, b: Vector2D) => Math.hypot(a.x - b.x, a.y - b.y);
   
-  // Telegram Haptics Helper
   const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'error' | 'success') => {
     if (window.Telegram?.WebApp?.HapticFeedback) {
       if (type === 'error' || type === 'success') {
@@ -125,10 +119,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         gameStateRef.current.isPlaying = true;
         startWave(gameStateRef.current.wave);
         triggerHaptic('medium');
+        setUiState(prev => ({ ...prev, isPlaying: true }));
     }
   }, [startWave]);
 
-  // Telegram Main Button Integration
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
@@ -140,11 +134,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const updateMainButton = () => {
       if (uiState.isGameOver) {
         mainBtn.setText("RESTART MISSION");
-        mainBtn.color = "#ef4444"; // Red
+        mainBtn.color = "#ef4444";
         mainBtn.show();
       } else if (!uiState.isPlaying) {
         mainBtn.setText(`START WAVE ${uiState.wave}`);
-        mainBtn.color = "#22c55e"; // Green
+        mainBtn.color = "#22c55e";
         mainBtn.show();
       } else {
         mainBtn.hide();
@@ -162,22 +156,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     };
 
     mainBtn.onClick(onMainBtnClick);
-
     return () => {
       mainBtn.offClick(onMainBtnClick);
       mainBtn.hide();
     };
   }, [uiState.isPlaying, uiState.isGameOver, uiState.wave, handleStartWave]);
 
-
-  // Game Loop
   const update = useCallback(() => {
     const state = gameStateRef.current;
     if (!state.isPlaying || state.isGameOver) return;
 
     state.gameTime++;
 
-    // Spawning
     if (spawnQueue.length > 0) {
       if (spawnQueue[0].delay <= 0) {
         const nextEnemy = spawnQueue.shift();
@@ -203,56 +193,45 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         spawnQueue[0].delay--;
       }
     } else if (enemiesRef.current.length === 0 && state.lives > 0) {
-       // Wave cleared
-       state.isPlaying = false; // Pause between waves
+       state.isPlaying = false;
        state.wave++;
        state.money += 50;
        triggerHaptic('success');
-       // Don't auto-start next wave, let user click button
+       setUiState(prev => ({ ...prev, isPlaying: false, wave: state.wave, money: state.money }));
     }
 
-    // Update Enemies
     for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
       const enemy = enemiesRef.current[i];
       const target = PATH_WAYPOINTS[enemy.pathIndex + 1];
-      
       if (!target) {
         state.lives--;
-        triggerHaptic('error'); // Vibrate on life lost
+        triggerHaptic('error');
         enemiesRef.current.splice(i, 1);
         if (state.lives <= 0) {
           state.isGameOver = true;
           state.isPlaying = false;
-          triggerHaptic('error');
           onGameOver(state.wave);
         }
         continue;
       }
-
       const dist = distance(enemy.position, target);
       const moveSpeed = enemy.frozen > 0 ? enemy.speed * 0.5 : enemy.speed;
       if (enemy.frozen > 0) enemy.frozen--;
-
       if (dist <= moveSpeed) {
         enemy.position = { ...target };
         enemy.pathIndex++;
-        enemy.distanceTraveled += dist;
       } else {
-        const dx = target.x - enemy.position.x;
-        const dy = target.y - enemy.position.y;
-        const angle = Math.atan2(dy, dx);
+        const angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
         enemy.position.x += Math.cos(angle) * moveSpeed;
         enemy.position.y += Math.sin(angle) * moveSpeed;
         enemy.distanceTraveled += moveSpeed;
       }
     }
 
-    // Update Towers
     towersRef.current.forEach(tower => {
       if (tower.lastShotFrame + tower.cooldown <= state.gameTime) {
         let target: Enemy | null = null;
         let maxDist = -1;
-
         for (const enemy of enemiesRef.current) {
           const d = distance(tower.position, enemy.position);
           if (d <= tower.range) {
@@ -262,7 +241,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             }
           }
         }
-
         if (target) {
           tower.lastShotFrame = state.gameTime;
           projectilesRef.current.push({
@@ -281,24 +259,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       }
     });
 
-    // Update Projectiles
     for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
       const p = projectilesRef.current[i];
       const target = enemiesRef.current.find(e => e.id === p.targetId);
-
       if (!target) {
         projectilesRef.current.splice(i, 1);
         continue;
       }
-
       const dist = distance(p.position, target.position);
       if (dist <= p.speed) {
         if (p.type === 'AOE' && p.blastRadius) {
            spawnParticle(p.position, '#f59e0b', 10);
            enemiesRef.current.forEach(e => {
-             if (distance(e.position, p.position) <= p.blastRadius!) {
-               e.hp -= p.damage;
-             }
+             if (distance(e.position, p.position) <= p.blastRadius!) e.hp -= p.damage;
            });
         } else {
            target.hp -= p.damage;
@@ -307,15 +280,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         }
         projectilesRef.current.splice(i, 1);
       } else {
-        const dx = target.position.x - p.position.x;
-        const dy = target.position.y - p.position.y;
-        const angle = Math.atan2(dy, dx);
+        const angle = Math.atan2(target.position.y - p.position.y, target.position.x - p.position.x);
         p.position.x += Math.cos(angle) * p.speed;
         p.position.y += Math.sin(angle) * p.speed;
       }
     }
 
-    // Clean up dead enemies
     for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
       if (enemiesRef.current[i].hp <= 0) {
         state.money += enemiesRef.current[i].moneyReward;
@@ -324,52 +294,37 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       }
     }
 
-    // Update Particles
     for (let i = particlesRef.current.length - 1; i >= 0; i--) {
       const p = particlesRef.current[i];
       p.life -= 0.05;
       p.position.x += p.velocity.x;
       p.position.y += p.velocity.y;
-      if (p.life <= 0) {
-        particlesRef.current.splice(i, 1);
-      }
+      if (p.life <= 0) particlesRef.current.splice(i, 1);
     }
 
-    // Sync UI
-    if (state.gameTime % 5 === 0 || !state.isPlaying) {
+    if (state.gameTime % 5 === 0) {
       setUiState({ ...state });
     }
-
   }, [spawnQueue, onGameOver]);
 
-  // Render Loop
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear
-    ctx.fillStyle = '#020617'; // Darker Slate
+    ctx.fillStyle = '#020617';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Draw Grid (Neon Style)
     ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
     ctx.lineWidth = 1;
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, CANVAS_HEIGHT);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_HEIGHT); ctx.stroke();
     }
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(CANVAS_WIDTH, y);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_WIDTH, y); ctx.stroke();
     }
 
-    // Draw Path with Glow
     ctx.save();
     ctx.shadowBlur = 10;
     ctx.shadowColor = '#3b82f6';
@@ -379,65 +334,30 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(PATH_WAYPOINTS[0].x, PATH_WAYPOINTS[0].y);
-    for (let i = 1; i < PATH_WAYPOINTS.length; i++) {
-      ctx.lineTo(PATH_WAYPOINTS[i].x, PATH_WAYPOINTS[i].y);
-    }
+    for (let i = 1; i < PATH_WAYPOINTS.length; i++) ctx.lineTo(PATH_WAYPOINTS[i].x, PATH_WAYPOINTS[i].y);
     ctx.stroke();
     ctx.restore();
 
-    // Draw Path Center Line
-    ctx.strokeStyle = 'rgba(96, 165, 250, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 10]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw Towers
     towersRef.current.forEach(tower => {
-      // Range Ring (Subtle)
-      /*
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(tower.position.x, tower.position.y, tower.range, 0, Math.PI * 2);
-      ctx.stroke();
-      */
-
-      // Base with Glow
       ctx.save();
       ctx.shadowBlur = 15;
       ctx.shadowColor = TOWER_TYPES[tower.type].color;
       ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.arc(tower.position.x, tower.position.y, 16, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(tower.position.x, tower.position.y, 16, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-      
-      // Turret
       ctx.fillStyle = TOWER_TYPES[tower.type].color;
-      ctx.beginPath();
-      ctx.rect(tower.position.x - 10, tower.position.y - 10, 20, 20);
-      ctx.fill();
-      
-      // Energy Core
+      ctx.fillRect(tower.position.x - 10, tower.position.y - 10, 20, 20);
       ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(tower.position.x, tower.position.y, 6, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(tower.position.x, tower.position.y, 6, 0, Math.PI * 2); ctx.fill();
     });
 
-    // Draw Enemies
     enemiesRef.current.forEach(enemy => {
       ctx.save();
       ctx.shadowBlur = 8;
       ctx.shadowColor = enemy.color;
       ctx.fillStyle = enemy.color;
-      ctx.beginPath();
-      ctx.arc(enemy.position.x, enemy.position.y, enemy.radius, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(enemy.position.x, enemy.position.y, enemy.radius, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-
-      // HP Bar
       const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
       ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
       ctx.fillRect(enemy.position.x - 12, enemy.position.y - 24, 24, 4);
@@ -445,148 +365,72 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       ctx.fillRect(enemy.position.x - 12, enemy.position.y - 24, 24 * hpPct, 4);
     });
 
-    // Draw Projectiles
     projectilesRef.current.forEach(p => {
       ctx.save();
       ctx.shadowBlur = 10;
       ctx.shadowColor = p.color;
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.position.x, p.position.y, p.radius, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(p.position.x, p.position.y, p.radius, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     });
 
-    // Draw Particles
     particlesRef.current.forEach(p => {
       ctx.globalAlpha = p.life;
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1.0;
+      ctx.beginPath(); ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2); ctx.fill();
     });
 
-    // Interaction: Hover & Placement Overlays
-    if (mousePosRef.current) {
+    if (mousePosRef.current && selectedTower) {
         const { x, y } = mousePosRef.current;
-        
-        if (selectedTower) {
-             const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-             const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-             const config = TOWER_TYPES[selectedTower];
-             
-             const canAfford = gameStateRef.current.money >= config.cost;
-             const onPath = isPointOnPath(gx, gy, 25);
-             const overlapping = towersRef.current.some(t => distance(t.position, {x: gx, y: gy}) < 20);
-             const isValid = canAfford && !onPath && !overlapping;
-
-             ctx.beginPath();
-             ctx.fillStyle = isValid ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 50, 50, 0.1)';
-             ctx.strokeStyle = isValid ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 50, 50, 0.5)';
-             ctx.lineWidth = 1;
-             ctx.setLineDash([4, 4]);
-             ctx.arc(gx, gy, config.range, 0, Math.PI * 2);
-             ctx.fill();
-             ctx.stroke();
-             ctx.setLineDash([]);
-
-             ctx.save();
-             ctx.shadowBlur = 15;
-             ctx.shadowColor = isValid ? config.color : '#ef4444';
-             ctx.globalAlpha = 0.6;
-             ctx.fillStyle = isValid ? config.color : '#ef4444';
-             ctx.beginPath();
-             ctx.rect(gx - 10, gy - 10, 20, 20);
-             ctx.fill();
-             ctx.restore();
-             
-             if (!isValid) {
-                 ctx.strokeStyle = '#ef4444';
-                 ctx.lineWidth = 2;
-                 ctx.beginPath();
-                 ctx.moveTo(gx - 8, gy - 8);
-                 ctx.lineTo(gx + 8, gy + 8);
-                 ctx.moveTo(gx + 8, gy - 8);
-                 ctx.lineTo(gx - 8, gy + 8);
-                 ctx.stroke();
-             }
-             ctx.globalAlpha = 1.0;
-        }
+        const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+        const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+        const config = TOWER_TYPES[selectedTower];
+        const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 25);
+        ctx.beginPath();
+        ctx.fillStyle = isValid ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+        ctx.arc(gx, gy, config.range, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = isValid ? config.color : '#ef4444';
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(gx - 10, gy - 10, 20, 20);
+        ctx.globalAlpha = 1.0;
     }
   }, [selectedTower]);
 
-  // Loop Controller
   useEffect(() => {
     let animationFrameId: number;
-    const loop = () => {
-      update();
-      draw();
-      animationFrameId = requestAnimationFrame(loop);
-    };
+    const loop = () => { update(); draw(); animationFrameId = requestAnimationFrame(loop); };
     loop();
     return () => cancelAnimationFrame(animationFrameId);
   }, [update, draw]);
 
-  // Canvas Coordinate Mapping
   const getCanvasCoordinates = (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
-      
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
-
-      return {
-          x: (clientX - rect.left) * scaleX,
-          y: (clientY - rect.top) * scaleY
-      };
+      return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
   };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY);
-  };
-  const handleMouseLeave = () => { mousePosRef.current = null; };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (e.touches.length > 0) {
-          const touch = e.touches[0];
-          mousePosRef.current = getCanvasCoordinates(touch.clientX, touch.clientY);
-      }
-  };
-  const handleTouchEnd = () => { setTimeout(() => { mousePosRef.current = null; }, 100); };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!selectedTower || gameStateRef.current.isGameOver) return;
-    
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos) return;
-    const { x, y } = pos;
-    
-    const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-    const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-
+    const gx = Math.floor(pos.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+    const gy = Math.floor(pos.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
     const config = TOWER_TYPES[selectedTower];
-    const canAfford = gameStateRef.current.money >= config.cost;
-    const onPath = isPointOnPath(gx, gy, 25);
-    const existing = towersRef.current.find(t => distance(t.position, { x: gx, y: gy }) < 20);
-    
-    if (canAfford && !onPath && !existing) {
+    if (gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 25) && !towersRef.current.some(t => distance(t.position, {x: gx, y: gy}) < 20)) {
       gameStateRef.current.money -= config.cost;
       towersRef.current.push({
-        id: Math.random().toString(),
-        position: { x: gx, y: gy },
-        type: config.type,
-        range: config.range,
-        damage: config.damage,
-        cooldown: config.cooldown,
-        lastShotFrame: 0
+        id: Math.random().toString(), position: { x: gx, y: gy }, type: config.type,
+        range: config.range, damage: config.damage, cooldown: config.cooldown, lastShotFrame: 0
       });
-      triggerHaptic('light'); // Success haptic
+      triggerHaptic('light');
       setUiState({ ...gameStateRef.current });
       setSelectedTower(null); 
     } else {
-      triggerHaptic('error'); // Error haptic
+      triggerHaptic('error');
     }
   };
 
@@ -601,169 +445,109 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   
   const resetGame = () => {
       gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0 };
-      towersRef.current = [];
-      enemiesRef.current = [];
-      projectilesRef.current = [];
-      particlesRef.current = [];
+      towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = [];
       setSpawnQueue([]);
-      setUiState({...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0});
+      setUiState({...gameStateRef.current});
       setAdvisorMessage("Systems reset. Awaiting command.");
       triggerHaptic('medium');
   };
 
-  const handleTowerSelect = (type: TowerType) => {
-    setSelectedTower(selectedTower === type ? null : type);
-    triggerHaptic('light');
-  };
-
   return (
     <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 p-2 lg:p-4 max-w-7xl mx-auto h-full overflow-hidden">
-      
-      {/* Game Area */}
       <div className="relative group flex-shrink-0 mx-auto w-full lg:w-auto flex justify-center items-center">
         <canvas 
-          ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+          ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
           onClick={handleCanvasClick}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          onTouchMove={handleTouchMove}
-          onTouchStart={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          style={{ touchAction: 'none' }}
+          onMouseMove={(e) => mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY)}
+          onMouseLeave={() => mousePosRef.current = null}
           className="bg-slate-950 rounded-xl shadow-2xl border border-slate-800 cursor-crosshair max-w-full max-h-[60vh] lg:max-h-full object-contain"
         />
         
-        {/* Overlay for Game Over */}
+        {!uiState.isPlaying && !uiState.isGameOver && uiState.wave === 1 && (
+            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-[2px]">
+                <div className="bg-slate-900/90 p-8 rounded-2xl border border-blue-500/50 text-center shadow-[0_0_50px_rgba(59,130,246,0.2)]">
+                    <Rocket size={48} className="text-blue-400 mx-auto mb-4 animate-bounce" />
+                    <h2 className="text-2xl font-display text-white mb-2">READY, COMMANDER?</h2>
+                    <p className="text-slate-400 mb-6 text-sm">Build defenses or start the first wave.</p>
+                    <button 
+                      onClick={handleStartWave}
+                      className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold transition-all transform hover:scale-105 flex items-center gap-2 mx-auto"
+                    >
+                        <Play size={20} /> START MISSION
+                    </button>
+                </div>
+            </div>
+        )}
+
         {uiState.isGameOver && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center rounded-xl z-20">
                 <h2 className="text-3xl lg:text-5xl font-display text-red-500 mb-4 animate-pulse">GAME OVER</h2>
                 <p className="text-slate-300 text-lg lg:text-xl mb-6">You survived {uiState.wave} waves</p>
-                <button 
-                  onClick={resetGame}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-bold transition flex items-center gap-2"
-                >
+                <button onClick={resetGame} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-bold transition flex items-center gap-2">
                     <RefreshCw size={20} /> Restart Mission
                 </button>
             </div>
         )}
       </div>
 
-      {/* Sidebar / HUD */}
       <div className="flex-1 flex flex-col gap-2 lg:gap-4 overflow-y-auto pb-4 lg:pb-0">
-        
-        {/* Stats Panel */}
         <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex flex-col gap-2 lg:gap-4">
             <div className="flex justify-between items-center">
                 <div className="flex flex-col">
-                  <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                      NEON DEFENSE
-                  </h1>
+                  <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">NEON DEFENSE</h1>
                   {userName && <span className="text-xs text-blue-400 font-mono">Cmdr. {userName}</span>}
                 </div>
-                <div className="text-xs text-slate-500 font-mono hidden lg:block">v1.1-TG</div>
             </div>
-            
             <div className="grid grid-cols-4 lg:grid-cols-2 gap-2 lg:gap-4">
-                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col lg:flex-row items-center gap-1 lg:gap-3 text-center lg:text-left">
-                    <Heart className="text-red-500 w-4 h-4 lg:w-6 lg:h-6" />
-                    <div>
-                        <div className="hidden lg:block text-xs text-slate-400">LIVES</div>
-                        <div className="text-sm lg:text-xl font-bold">{uiState.lives}</div>
-                    </div>
+                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col items-center lg:flex-row gap-1 lg:gap-3">
+                    <Heart className="text-red-500 w-4 h-4" />
+                    <div className="text-sm lg:text-xl font-bold">{uiState.lives}</div>
                 </div>
-                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col lg:flex-row items-center gap-1 lg:gap-3 text-center lg:text-left">
-                    <Coins className="text-yellow-400 w-4 h-4 lg:w-6 lg:h-6" />
-                    <div>
-                        <div className="hidden lg:block text-xs text-slate-400">CREDITS</div>
-                        <div className="text-sm lg:text-xl font-bold">{uiState.money}</div>
-                    </div>
+                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col items-center lg:flex-row gap-1 lg:gap-3">
+                    <Coins className="text-yellow-400 w-4 h-4" />
+                    <div className="text-sm lg:text-xl font-bold">{uiState.money}</div>
                 </div>
-                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col lg:flex-row items-center gap-1 lg:gap-3 text-center lg:text-left">
-                    <Shield className="text-emerald-400 w-4 h-4 lg:w-6 lg:h-6" />
-                    <div>
-                        <div className="hidden lg:block text-xs text-slate-400">WAVE</div>
-                        <div className="text-sm lg:text-xl font-bold">{uiState.wave}</div>
-                    </div>
+                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col items-center lg:flex-row gap-1 lg:gap-3">
+                    <Shield className="text-emerald-400 w-4 h-4" />
+                    <div className="text-sm lg:text-xl font-bold">{uiState.wave}</div>
                 </div>
                 <button 
                   onClick={handleStartWave}
-                  disabled={uiState.isPlaying && enemiesRef.current.length > 0} 
-                  className={`p-2 lg:p-3 rounded-lg flex items-center justify-center gap-2 font-bold transition text-xs lg:text-base
-                    ${uiState.isPlaying && enemiesRef.current.length > 0
-                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed' 
-                        : 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'}`}
+                  disabled={uiState.isPlaying} 
+                  className={`p-2 lg:p-3 rounded-lg flex items-center justify-center gap-2 font-bold transition
+                    ${uiState.isPlaying ? 'bg-slate-700 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.4)]'}`}
                 >
-                    {uiState.isPlaying && enemiesRef.current.length > 0 ? (
-                         <div className="flex gap-1"><span className="animate-bounce">.</span><span className="animate-bounce delay-75">.</span><span className="animate-bounce delay-150">.</span></div>
-                    ) : (
-                        <Play size={18} />
-                    )}
+                    <Play size={18} />
                 </button>
             </div>
         </div>
 
-        {/* Build Menu */}
-        <div className="bg-slate-800 p-2 lg:p-4 rounded-xl border border-slate-700 flex-shrink-0">
-            <h3 className="text-slate-400 text-xs lg:text-sm font-bold uppercase mb-2">Arsenal</h3>
-            <div className="flex overflow-x-auto lg:grid lg:grid-cols-1 gap-2 pb-2 lg:pb-0 snap-x">
+        <div className="bg-slate-800 p-2 lg:p-4 rounded-xl border border-slate-700">
+            <h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Arsenal</h3>
+            <div className="flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0">
                 {Object.values(TOWER_TYPES).map(tower => (
                     <button
                         key={tower.type}
-                        onClick={() => handleTowerSelect(tower.type)}
-                        className={`min-w-[140px] lg:min-w-0 p-2 lg:p-3 rounded-lg border flex flex-col lg:flex-row items-center lg:items-center gap-2 lg:gap-4 transition hover:bg-slate-700/50 snap-center
-                            ${selectedTower === tower.type 
-                                ? 'border-blue-500 bg-slate-700' 
-                                : 'border-slate-700 bg-slate-900'}`}
+                        onClick={() => { setSelectedTower(selectedTower === tower.type ? null : tower.type); triggerHaptic('light'); }}
+                        className={`min-w-[120px] lg:min-w-0 p-2 lg:p-3 rounded-lg border flex flex-col lg:flex-row items-center gap-2 transition
+                            ${selectedTower === tower.type ? 'border-blue-500 bg-slate-700' : 'border-slate-700 bg-slate-900'}`}
                     >
-                        <div 
-                            className="w-8 h-8 lg:w-10 lg:h-10 rounded flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: tower.color, boxShadow: `0 0 10px ${tower.color}` }}
-                        >
-                            <Zap size={16} className="text-white mix-blend-overlay" />
-                        </div>
-                        <div className="text-center lg:text-left w-full">
-                            <div className="font-bold text-xs lg:text-sm flex flex-col lg:flex-row lg:justify-between whitespace-nowrap">
-                                {tower.name}
-                                <span className={gameStateRef.current.money >= tower.cost ? 'text-yellow-400' : 'text-red-400'}>
-                                    ${tower.cost}
-                                </span>
-                            </div>
-                            <div className="text-[10px] lg:text-xs text-slate-400 truncate hidden lg:block">{tower.description}</div>
+                        <div className="w-6 h-6 lg:w-8 lg:h-8 rounded" style={{ backgroundColor: tower.color }} />
+                        <div className="text-xs lg:text-sm font-bold flex flex-col lg:flex-row lg:justify-between w-full">
+                            {tower.name} <span className="text-yellow-400">${tower.cost}</span>
                         </div>
                     </button>
                 ))}
             </div>
         </div>
 
-        {/* AI Advisor Panel */}
-        <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 relative overflow-hidden flex-1 lg:flex-none">
-             <div className="absolute top-0 right-0 p-4 opacity-10 hidden lg:block">
-                 <Bot size={64} />
-             </div>
-             <h3 className="text-purple-400 text-xs lg:text-sm font-bold uppercase mb-2 flex items-center gap-2">
-                 <Bot size={14} className="lg:w-4 lg:h-4" /> AI Tactical
-             </h3>
-             <div className="bg-slate-900/50 p-2 lg:p-3 rounded-lg text-xs lg:text-sm text-slate-300 min-h-[60px] lg:min-h-[80px] mb-2 lg:mb-3 overflow-y-auto max-h-24 lg:max-h-none">
-                 {isAdvisorLoading ? (
-                     <div className="flex items-center gap-2 animate-pulse">
-                         <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                         Analyzing...
-                     </div>
-                 ) : (
-                     <p className="italic">"{advisorMessage}"</p>
-                 )}
-             </div>
-             <button 
-                onClick={handleConsultAI}
-                disabled={isAdvisorLoading}
-                className="w-full py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/50 text-purple-300 rounded text-xs lg:text-sm font-bold transition flex items-center justify-center gap-2"
-             >
-                 Request Analysis
+        <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex-1 min-h-[100px]">
+             <h3 className="text-purple-400 text-xs font-bold uppercase mb-2 flex items-center gap-2"><Bot size={14} /> AI Advisor</h3>
+             <div className="bg-slate-900/50 p-2 rounded-lg text-xs lg:text-sm text-slate-300 italic mb-2">"{advisorMessage}"</div>
+             <button onClick={handleConsultAI} disabled={isAdvisorLoading} className="w-full py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/50 text-purple-300 rounded text-xs font-bold transition">
+                 {isAdvisorLoading ? "Analyzing..." : "Request Analysis"}
              </button>
         </div>
-
       </div>
     </div>
   );
