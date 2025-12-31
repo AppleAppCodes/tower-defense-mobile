@@ -86,3 +86,32 @@ export interface WaveConfig {
   interval: number; // Frames between spawns
   enemyType: EnemyType;
 }
+
+// Telegram Web App Global Types
+declare global {
+  interface Window {
+    Telegram: {
+      WebApp: {
+        ready: () => void;
+        expand: () => void;
+        close: () => void;
+        setHeaderColor: (color: string) => void;
+        setBackgroundColor: (color: string) => void;
+        MainButton: {
+          text: string;
+          color: string;
+          textColor: string;
+          isVisible: boolean;
+          isActive: boolean;
+          show: () => void;
+          hide: () => void;
+          onClick: (callback: () => void) => void;
+        };
+        initDataUnsafe: any;
+        colorScheme: 'light' | 'dark';
+        viewportHeight: number;
+        viewportStableHeight: number;
+      };
+    };
+  }
+}

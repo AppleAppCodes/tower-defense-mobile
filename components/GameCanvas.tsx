@@ -576,7 +576,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 p-2 lg:p-4 max-w-7xl mx-auto h-screen overflow-hidden">
+    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 p-2 lg:p-4 max-w-7xl mx-auto h-full overflow-hidden">
       
       {/* Game Area */}
       <div className="relative group flex-shrink-0 mx-auto w-full lg:w-auto flex justify-center items-center">
