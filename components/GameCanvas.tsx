@@ -494,7 +494,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex flex-col gap-2 lg:gap-4">
             <div className="flex justify-between items-center">
                 <div className="flex flex-col">
-                  <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">NEON DEFENSE</h1>
+                  <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+                    NEON DEFENSE <span className="text-[10px] text-slate-500 ml-1 font-mono">v1.1</span>
+                  </h1>
                   {userName && <span className="text-xs text-blue-400 font-mono">Cmdr. {userName}</span>}
                 </div>
             </div>
