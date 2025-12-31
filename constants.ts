@@ -3,6 +3,7 @@ import { EnemyType, TowerType, TowerConfig, Vector2D } from './types';
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
 export const GRID_SIZE = 40;
+export const AUTO_START_DELAY = 600; // 10 seconds at 60fps
 
 // Simple winding path
 export const PATH_WAYPOINTS: Vector2D[] = [
@@ -18,52 +19,93 @@ export const PATH_WAYPOINTS: Vector2D[] = [
 
 export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
   [TowerType.BASIC]: {
-    name: 'Turret',
+    name: 'Sentry',
     type: TowerType.BASIC,
     cost: 50,
     range: 120,
     damage: 20,
     cooldown: 40,
-    color: '#22d3ee', // Cyan 400
-    description: 'Balanced damage and fire rate.'
+    color: '#60a5fa', // Blue 400
+    description: 'Standard perimeter defense.'
   },
   [TowerType.RAPID]: {
-    name: 'Blaster',
+    name: 'Gatling',
     type: TowerType.RAPID,
     cost: 120,
     range: 100,
     damage: 8,
-    cooldown: 10,
-    color: '#f472b6', // Pink 400
+    cooldown: 8,
+    color: '#84cc16', // Lime 500
     description: 'High fire rate, low damage.'
   },
   [TowerType.SNIPER]: {
-    name: 'Sniper',
+    name: 'Railgun',
     type: TowerType.SNIPER,
     cost: 200,
-    range: 250,
-    damage: 100,
+    range: 280,
+    damage: 120,
     cooldown: 120,
-    color: '#a3e635', // Lime 400
-    description: 'Long range, high damage, slow.'
+    color: '#f97316', // Orange 500
+    description: 'Long range anti-armor.'
   },
   [TowerType.AOE]: {
-    name: 'Mortar',
+    name: 'Howitzer',
     type: TowerType.AOE,
     cost: 300,
-    range: 150,
-    damage: 40,
+    range: 160,
+    damage: 50,
     cooldown: 90,
-    color: '#f59e0b', // Amber 500
-    description: 'Area damage explosions.'
+    color: '#dc2626', // Red 600
+    description: 'Explosive area damage.'
+  },
+  // --- NEW WEAPONS ---
+  [TowerType.LASER]: {
+    name: 'Prism',
+    type: TowerType.LASER,
+    cost: 180,
+    range: 140,
+    damage: 5,
+    cooldown: 5, // Extremely fast
+    color: '#06b6d4', // Cyan 500
+    description: 'Continuous energy beam.'
+  },
+  [TowerType.FROST]: {
+    name: 'Cryo',
+    type: TowerType.FROST,
+    cost: 150,
+    range: 110,
+    damage: 10,
+    cooldown: 45,
+    color: '#e0f2fe', // Sky 100 (Ice white/blue)
+    description: 'Slows down enemies.'
+  },
+  [TowerType.SHOCK]: {
+    name: 'Tesla',
+    type: TowerType.SHOCK,
+    cost: 250,
+    range: 90,
+    damage: 80,
+    cooldown: 50,
+    color: '#facc15', // Yellow 400
+    description: 'High voltage short range.'
+  },
+  [TowerType.MISSILE]: {
+    name: 'Swarm',
+    type: TowerType.MISSILE,
+    cost: 400,
+    range: 200,
+    damage: 60,
+    cooldown: 100,
+    color: '#9333ea', // Purple 600
+    description: 'Tracking missiles, large blast.'
   }
 };
 
 export const ENEMY_STATS: Record<EnemyType, { maxHp: number; speed: number; reward: number; color: string; radius: number }> = {
-  [EnemyType.NORMAL]: { maxHp: 60, speed: 2, reward: 10, color: '#94a3b8', radius: 12 },
-  [EnemyType.FAST]: { maxHp: 30, speed: 4, reward: 15, color: '#facc15', radius: 10 },
-  [EnemyType.TANK]: { maxHp: 200, speed: 1, reward: 30, color: '#ef4444', radius: 16 },
-  [EnemyType.BOSS]: { maxHp: 1000, speed: 0.5, reward: 100, color: '#a855f7', radius: 24 },
+  [EnemyType.NORMAL]: { maxHp: 60, speed: 2, reward: 10, color: '#94a3b8', radius: 12 }, // Slate 400
+  [EnemyType.FAST]: { maxHp: 30, speed: 4, reward: 15, color: '#a3e635', radius: 10 },   // Lime 400
+  [EnemyType.TANK]: { maxHp: 200, speed: 1, reward: 30, color: '#475569', radius: 16 },   // Slate 600
+  [EnemyType.BOSS]: { maxHp: 1000, speed: 0.5, reward: 100, color: '#7e22ce', radius: 24 }, // Purple 700
 };
 
 export const INITIAL_STATE = {

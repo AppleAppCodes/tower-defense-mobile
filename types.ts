@@ -4,7 +4,11 @@ export enum TowerType {
   BASIC = 'BASIC',
   RAPID = 'RAPID',
   SNIPER = 'SNIPER',
-  AOE = 'AOE'
+  AOE = 'AOE',
+  LASER = 'LASER',
+  FROST = 'FROST',
+  SHOCK = 'SHOCK',
+  MISSILE = 'MISSILE'
 }
 
 export enum EnemyType {
@@ -49,6 +53,7 @@ export interface Tower extends Entity {
   range: number;
   damage: number;
   cooldown: number;
+  rotation: number; // Radians
 }
 
 export interface Projectile extends Entity {
@@ -60,6 +65,7 @@ export interface Projectile extends Entity {
   hasHit: boolean;
   type: 'SINGLE' | 'AOE';
   blastRadius?: number;
+  effect?: 'FREEZE' | 'SHOCK'; // Status effects
 }
 
 export interface Particle {
@@ -79,6 +85,7 @@ export interface GameState {
   isPlaying: boolean;
   isGameOver: boolean;
   gameTime: number; // Total frames
+  autoStartTimer: number; // Frames until next wave
 }
 
 export interface WaveConfig {
@@ -115,7 +122,6 @@ declare global {
           offClick: (callback: () => void) => void;
           showProgress: (leaveActive: boolean) => void;
           hideProgress: () => void;
-          // Added setText method to match Telegram WebApp API
           setText: (text: string) => void;
         };
         initDataUnsafe: {
@@ -130,5 +136,7 @@ declare global {
         viewportStableHeight: number;
       };
     };
+    // Audio Context Polyfill
+    webkitAudioContext: typeof AudioContext;
   }
 }
