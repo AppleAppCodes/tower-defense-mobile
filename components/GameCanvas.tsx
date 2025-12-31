@@ -171,6 +171,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const distance = (a: Vector2D, b: Vector2D) => Math.hypot(a.x - b.x, a.y - b.y);
   
+  // LOCK CANVAS SCROLLING
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Hard prevent default on all touch events to stop browser scrolling
+    const preventDefault = (e: TouchEvent) => {
+        // Allow zooming or other gestures? No, for game we typically lock everything.
+        if (e.cancelable) e.preventDefault();
+    };
+    
+    // Passive: false is required to allow preventDefault to work
+    canvas.addEventListener('touchmove', preventDefault, { passive: false });
+    canvas.addEventListener('touchstart', preventDefault, { passive: false });
+    canvas.addEventListener('touchend', preventDefault, { passive: false });
+
+    return () => {
+        canvas.removeEventListener('touchmove', preventDefault);
+        canvas.removeEventListener('touchstart', preventDefault);
+        canvas.removeEventListener('touchend', preventDefault);
+    };
+  }, []);
+
   useEffect(() => {
     if (terrainRef.current.craters.length === 0) {
         for (let i = 0; i < 40; i++) {
@@ -1068,7 +1091,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             <div className="flex justify-between items-center w-full">
                 <div className="flex flex-col">
                   <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-slate-200 to-slate-400 whitespace-nowrap">
-                    PLANET DEFENSE <span className="text-[10px] text-yellow-500 ml-1 font-mono">v1.0 PRO</span>
+                    PLANET DEFENSE <span className="text-[10px] text-yellow-500 ml-1 font-mono">v1.0 BETA</span>
                   </h1>
                   {userName && <span className="text-xs text-blue-400 font-mono truncate max-w-[200px]">Cmdr. {userName}</span>}
                 </div>

@@ -20,6 +20,21 @@ const App: React.FC = () => {
       // Enable the closing confirmation to prevent accidental swipes closing the game
       tg.enableClosingConfirmation();
 
+      // Disable vertical swipes (Newer Telegram API feature) to lock the view
+      // We check if the method exists or if the property is settable
+      if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7')) {
+          if (typeof tg.disableVerticalSwipes === 'function') {
+              tg.disableVerticalSwipes();
+          }
+      } else {
+           // Fallback attempt: some versions expose 'isVerticalSwipesEnabled' property directly
+           // @ts-ignore
+           if (tg.isVerticalSwipesEnabled !== undefined) {
+               // @ts-ignore
+               tg.isVerticalSwipesEnabled = false;
+           }
+      }
+
       // Notify Telegram that the app is initialized and ready to be shown
       tg.ready();
     }
@@ -47,7 +62,7 @@ const App: React.FC = () => {
     // Replaced h-[100vh] with style={{ height: appHeight }} to strictly respect the visible window size
     <div 
       style={{ height: appHeight }} 
-      className="w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none"
+      className="w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none overscroll-none"
     >
       <GameCanvas onGameOver={handleGameOver} />
     </div>
