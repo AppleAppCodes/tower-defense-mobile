@@ -1,0 +1,5 @@
+{
+  "name": "Neon Defense AI",
+  "description": "A high-performance Tower Defense game with a neon aesthetic. Features multiple tower types, increasing difficulty waves, and an integrated Gemini AI Strategy Advisor to help you survive the onslaught.",
+  "requestFramePermissions": []
+}
