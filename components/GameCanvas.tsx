@@ -3,7 +3,7 @@ import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Pa
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY } from '../constants';
 import { getTacticalAdvice } from '../services/geminiService';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Bot, Play, RefreshCw, Rocket, Timer, Map as MapIcon, ChevronRight, ChevronLeft, Zap, Trash2, FastForward } from 'lucide-react';
+import { Heart, Coins, Shield, Bot, Play, RefreshCw, Rocket, Timer, Map as MapIcon, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -161,6 +161,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
   const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{title: string, subtitle?: string, color: string, type: 'info' | 'boss'} | null>(null);
   
   const [advisorMessage, setAdvisorMessage] = useState<string>("Planetary defense systems online. Select a mission.");
   const [isAdvisorLoading, setIsAdvisorLoading] = useState(false);
@@ -253,7 +254,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   const startWave = useCallback((waveNum: number) => {
-    audioService.playWaveStart();
+    // Determine if it's a boss wave
+    const isBossWave = waveNum >= 10 && waveNum % 10 === 0; // Boss every 10 waves
+    
+    if (isBossWave) {
+         audioService.playAlarm();
+         triggerHaptic('heavy');
+         setNotification({
+             title: "BOSS WARNING",
+             subtitle: "MASSIVE SIGNAL DETECTED",
+             color: "text-red-500",
+             type: 'boss'
+         });
+         // Clear notification after 3s
+         setTimeout(() => setNotification(null), 3000);
+    } else {
+         audioService.playWaveStart();
+         // Permanent indicator used instead of notification for standard waves
+    }
+
     const count = 5 + Math.floor(waveNum * 1.5);
     const newQueue: { type: EnemyType; delay: number }[] = [];
     
@@ -261,7 +280,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       let type = EnemyType.NORMAL;
       if (waveNum > 2 && i % 3 === 0) type = EnemyType.FAST;
       if (waveNum > 4 && i % 5 === 0) type = EnemyType.TANK;
-      if (waveNum > 9 && i === count - 1) type = EnemyType.BOSS;
+      if (waveNum % 10 === 0 && i === count - 1) type = EnemyType.BOSS;
       
       newQueue.push({ type, delay: i * 60 });
     }
@@ -290,19 +309,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         mainBtn.setText("RESTART MISSION");
         mainBtn.color = "#ef4444";
         mainBtn.show();
-      } else if (!uiState.isPlaying) {
-        if (!hasStartedGame) {
-             mainBtn.hide(); // Hide during map selection
-        } else if (uiState.autoStartTimer > 0) {
-            mainBtn.setText(`NEXT WAVE IN ${Math.ceil(uiState.autoStartTimer / 60)}s`);
-            mainBtn.color = "#eab308";
-            mainBtn.show();
-        } else {
-            mainBtn.setText(`START WAVE ${uiState.wave}`);
-            mainBtn.color = "#22c55e";
-            mainBtn.show();
-        }
       } else {
+        // We only show the Telegram Main Button for Game Over now.
+        // In-game controls are handled by the UI dashboard.
         mainBtn.hide();
       }
     };
@@ -310,8 +319,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const onMainBtnClick = () => {
       if (uiState.isGameOver) {
         resetGame();
-      } else {
-        handleStartWave();
       }
     };
     mainBtn.onClick(onMainBtnClick);
@@ -1015,6 +1022,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           className="block bg-[#0f172a] rounded-xl shadow-2xl border border-slate-700 cursor-crosshair"
         />
         
+        {/* HUD: Wave Indicator (Permanent, Top-Left) */}
+        {!uiState.isGameOver && hasStartedGame && (
+             <div className="absolute top-3 left-3 z-10 pointer-events-none animate-in fade-in duration-500">
+                <div className="bg-slate-900/40 backdrop-blur-md border border-white/10 rounded-full px-4 py-1.5 flex items-center gap-2 shadow-sm">
+                    <div className={`w-2 h-2 rounded-full ${uiState.isPlaying ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+                    <span className="text-white/90 font-display text-xs font-bold tracking-widest">WAVE {uiState.wave}</span>
+                </div>
+            </div>
+        )}
+
         {/* START SCREEN & MAP SELECT */}
         {!hasStartedGame && !uiState.isPlaying && !uiState.isGameOver && (
             <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-sm">
@@ -1042,6 +1059,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                         <Play size={18} /> DEPLOY
                     </button>
                 </div>
+            </div>
+        )}
+
+        {/* NOTIFICATION OVERLAY */}
+        {notification && (
+            <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none flex flex-col items-center justify-center animate-in fade-in zoom-in-90 duration-300 ${notification.type === 'boss' ? 'animate-pulse' : ''}`}>
+                 <h2 className={`font-display text-4xl lg:text-6xl font-black ${notification.color} drop-shadow-[0_0_15px_rgba(0,0,0,0.8)] stroke-black tracking-widest`}>
+                     {notification.title}
+                 </h2>
+                 {notification.subtitle && (
+                     <div className="bg-red-900/80 text-white px-4 py-1 rounded text-sm font-mono border border-red-500 mt-2 flex items-center gap-2">
+                         <AlertTriangle size={16} /> {notification.subtitle}
+                     </div>
+                 )}
             </div>
         )}
 

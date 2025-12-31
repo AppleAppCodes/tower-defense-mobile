@@ -137,6 +137,29 @@ class AudioService {
     osc.start(now);
     osc.stop(now + 1);
   }
+
+  playAlarm() {
+    if (!this.enabled || !this.ctx) return;
+    this.resume();
+    const now = this.ctx.currentTime;
+    
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.linearRampToValueAtTime(400, now + 0.5);
+    osc.frequency.linearRampToValueAtTime(600, now + 1.0);
+    osc.frequency.linearRampToValueAtTime(400, now + 1.5);
+
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.linearRampToValueAtTime(0, now + 1.5);
+
+    osc.start(now);
+    osc.stop(now + 1.5);
+  }
 }
 
 export const audioService = new AudioService();
