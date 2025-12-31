@@ -460,7 +460,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           onClick={handleCanvasClick}
           onMouseMove={(e) => mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY)}
           onMouseLeave={() => mousePosRef.current = null}
-          className="bg-slate-950 rounded-xl shadow-2xl border border-slate-800 cursor-crosshair max-w-full max-h-[60vh] lg:max-h-full object-contain"
+          style={{ width: '100%', height: 'auto', maxHeight: '60vh' }}
+          className="block bg-slate-950 rounded-xl shadow-2xl border border-slate-800 cursor-crosshair object-contain"
         />
         
         {!uiState.isPlaying && !uiState.isGameOver && uiState.wave === 1 && (
@@ -495,12 +496,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             <div className="flex justify-between items-center">
                 <div className="flex flex-col">
                   <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                    NEON DEFENSE <span className="text-[10px] text-slate-500 ml-1 font-mono">v1.1</span>
+                    NEON DEFENSE <span className="text-[10px] text-slate-500 ml-1 font-mono">v1.2</span>
                   </h1>
                   {userName && <span className="text-xs text-blue-400 font-mono">Cmdr. {userName}</span>}
                 </div>
             </div>
-            <div className="grid grid-cols-4 lg:grid-cols-2 gap-2 lg:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
                 <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col items-center lg:flex-row gap-1 lg:gap-3">
                     <Heart className="text-red-500 w-4 h-4" />
                     <div className="text-sm lg:text-xl font-bold">{uiState.lives}</div>
