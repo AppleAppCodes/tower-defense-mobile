@@ -1,15 +1,15 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition } from '../types';
+import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY } from '../constants';
 import { getTacticalAdvice } from '../services/geminiService';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Bot, Play, RefreshCw, Rocket, Timer, Map as MapIcon, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Heart, Coins, Shield, Bot, Play, RefreshCw, Rocket, Timer, Map as MapIcon, ChevronRight, ChevronLeft, Zap, Trash2, FastForward } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
 }
 
-// Helper for path collision (updated to accept dynamic waypoints)
+// Helper for path collision
 const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[]) => {
   for (let i = 0; i < waypoints.length - 1; i++) {
       const p1 = waypoints[i];
@@ -149,15 +149,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     isGameOver: false,
     gameTime: 0,
     autoStartTimer: -1,
+    gameSpeed: 1,
   });
   
   const towersRef = useRef<Tower[]>([]);
   const enemiesRef = useRef<Enemy[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const floatingTextsRef = useRef<FloatingText[]>([]);
   
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
-  const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
+  const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
+  const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
+  
   const [advisorMessage, setAdvisorMessage] = useState<string>("Planetary defense systems online. Select a mission.");
   const [isAdvisorLoading, setIsAdvisorLoading] = useState(false);
   const [spawnQueue, setSpawnQueue] = useState<{ type: EnemyType; delay: number }[]>([]);
@@ -186,14 +190,27 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     }
   }, []);
 
-  const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'error' | 'success') => {
+  const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'error' | 'success' | 'selection') => {
     if (window.Telegram?.WebApp?.HapticFeedback) {
       if (type === 'error' || type === 'success') {
         window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
+      } else if (type === 'selection') {
+        window.Telegram.WebApp.HapticFeedback.selectionChanged();
       } else {
         window.Telegram.WebApp.HapticFeedback.impactOccurred(type);
       }
     }
+  };
+
+  const spawnFloatingText = (pos: Vector2D, text: string, color: string) => {
+    floatingTextsRef.current.push({
+        id: Math.random().toString(),
+        position: { ...pos, y: pos.y - 10 },
+        text,
+        life: 1.0,
+        color,
+        velocity: { x: (Math.random() - 0.5) * 0.5, y: -1 }
+    });
   };
 
   const spawnParticle = (pos: Vector2D, color: string, count: number = 5) => {
@@ -283,182 +300,197 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const update = useCallback(() => {
     const state = gameStateRef.current;
-    
     if (state.isGameOver) return;
 
-    if (!state.isPlaying && state.autoStartTimer > 0) {
-        state.autoStartTimer--;
-        if (state.autoStartTimer === 0) handleStartWave();
-        if (state.autoStartTimer % 60 === 0) setUiState({ ...state });
-        return;
-    }
+    const loops = state.gameSpeed;
 
-    if (!state.isPlaying) return;
-
-    state.gameTime++;
-
-    if (spawnQueue.length > 0) {
-      if (spawnQueue[0].delay <= 0) {
-        const nextEnemy = spawnQueue.shift();
-        if (nextEnemy) {
-          const stats = ENEMY_STATS[nextEnemy.type];
-          enemiesRef.current.push({
-            id: Math.random().toString(36),
-            position: { ...currentMap.waypoints[0] }, // Spawn at current map start
-            type: nextEnemy.type,
-            hp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
-            maxHp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
-            speed: stats.speed,
-            pathIndex: 0,
-            distanceTraveled: 0,
-            frozen: 0,
-            moneyReward: stats.reward,
-            color: stats.color,
-            radius: stats.radius
-          });
+    for (let loop = 0; loop < loops; loop++) {
+        if (!state.isPlaying && state.autoStartTimer > 0) {
+            state.autoStartTimer--;
+            if (state.autoStartTimer === 0) handleStartWave();
+            if (state.autoStartTimer % 60 === 0 && loop === 0) setUiState({ ...state });
+            continue;
         }
-        setSpawnQueue([...spawnQueue]);
-      } else {
-        spawnQueue[0].delay--;
-      }
-    } else if (enemiesRef.current.length === 0 && state.lives > 0) {
-       state.isPlaying = false;
-       state.wave++;
-       state.money += 50 + (state.wave * 10);
-       state.autoStartTimer = AUTO_START_DELAY; 
-       triggerHaptic('success');
-       setUiState(prev => ({ ...prev, isPlaying: false, wave: state.wave, money: state.money, autoStartTimer: state.autoStartTimer }));
-    }
 
-    for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
-      const enemy = enemiesRef.current[i];
-      const target = currentMap.waypoints[enemy.pathIndex + 1]; // Use current map
-      if (!target) {
-        state.lives--;
-        triggerHaptic('error');
-        enemiesRef.current.splice(i, 1);
-        if (state.lives <= 0) {
-          state.isGameOver = true;
-          state.isPlaying = false;
-          onGameOver(state.wave);
+        if (!state.isPlaying) continue;
+
+        state.gameTime++;
+
+        if (spawnQueue.length > 0) {
+          if (spawnQueue[0].delay <= 0) {
+            const nextEnemy = spawnQueue.shift();
+            if (nextEnemy) {
+              const stats = ENEMY_STATS[nextEnemy.type];
+              enemiesRef.current.push({
+                id: Math.random().toString(36),
+                position: { ...currentMap.waypoints[0] }, // Spawn at current map start
+                type: nextEnemy.type,
+                hp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
+                maxHp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
+                speed: stats.speed,
+                pathIndex: 0,
+                distanceTraveled: 0,
+                frozen: 0,
+                moneyReward: stats.reward,
+                color: stats.color,
+                radius: stats.radius
+              });
+            }
+            setSpawnQueue([...spawnQueue]);
+          } else {
+            spawnQueue[0].delay--;
+          }
+        } else if (enemiesRef.current.length === 0 && state.lives > 0) {
+           state.isPlaying = false;
+           state.wave++;
+           state.money += 50 + (state.wave * 10);
+           state.autoStartTimer = AUTO_START_DELAY; 
+           triggerHaptic('success');
+           setUiState(prev => ({ ...prev, isPlaying: false, wave: state.wave, money: state.money, autoStartTimer: state.autoStartTimer }));
+           break; // Break loop to ensure state update happens
         }
-        continue;
-      }
-      const dist = distance(enemy.position, target);
-      const moveSpeed = enemy.frozen > 0 ? enemy.speed * 0.5 : enemy.speed;
-      if (enemy.frozen > 0) enemy.frozen--;
-      if (dist <= moveSpeed) {
-        enemy.position = { ...target };
-        enemy.pathIndex++;
-      } else {
-        const angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
-        enemy.position.x += Math.cos(angle) * moveSpeed;
-        enemy.position.y += Math.sin(angle) * moveSpeed;
-        enemy.distanceTraveled += moveSpeed;
-      }
-    }
 
-    towersRef.current.forEach(tower => {
-      let target: Enemy | null = null;
-      let maxDist = -1;
-      
-      for (const enemy of enemiesRef.current) {
-        const d = distance(tower.position, enemy.position);
-        if (d <= tower.range) {
-          if (enemy.distanceTraveled > maxDist) {
-            maxDist = enemy.distanceTraveled;
-            target = enemy;
+        for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
+          const enemy = enemiesRef.current[i];
+          const target = currentMap.waypoints[enemy.pathIndex + 1]; // Use current map
+          if (!target) {
+            state.lives--;
+            triggerHaptic('error');
+            enemiesRef.current.splice(i, 1);
+            if (state.lives <= 0) {
+              state.isGameOver = true;
+              state.isPlaying = false;
+              onGameOver(state.wave);
+            }
+            continue;
+          }
+          const dist = distance(enemy.position, target);
+          const moveSpeed = enemy.frozen > 0 ? enemy.speed * 0.5 : enemy.speed;
+          if (enemy.frozen > 0) enemy.frozen--;
+          if (dist <= moveSpeed) {
+            enemy.position = { ...target };
+            enemy.pathIndex++;
+          } else {
+            const angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
+            enemy.position.x += Math.cos(angle) * moveSpeed;
+            enemy.position.y += Math.sin(angle) * moveSpeed;
+            enemy.distanceTraveled += moveSpeed;
           }
         }
-      }
 
-      if (target) {
-          tower.rotation = Math.atan2(target.position.y - tower.position.y, target.position.x - tower.position.x);
-      }
-
-      if (tower.lastShotFrame + tower.cooldown <= state.gameTime) {
-        if (target) {
-          tower.lastShotFrame = state.gameTime;
+        towersRef.current.forEach(tower => {
+          let target: Enemy | null = null;
+          let maxDist = -1;
           
-          let pType: 'SINGLE' | 'AOE' = 'SINGLE';
-          let blast = 0;
-          let effect: 'FREEZE' | 'SHOCK' | undefined = undefined;
-          let speed = 10;
-          let color = TOWER_TYPES[tower.type].color;
-          let soundType: 'LASER' | 'HEAVY' | 'NORMAL' = 'NORMAL';
+          for (const enemy of enemiesRef.current) {
+            const d = distance(tower.position, enemy.position);
+            if (d <= tower.range) {
+              if (enemy.distanceTraveled > maxDist) {
+                maxDist = enemy.distanceTraveled;
+                target = enemy;
+              }
+            }
+          }
 
-          if (tower.type === TowerType.AOE) { pType = 'AOE'; blast = 60; soundType = 'HEAVY'; }
-          if (tower.type === TowerType.MISSILE) { pType = 'AOE'; blast = 80; speed = 4; soundType = 'HEAVY'; }
-          if (tower.type === TowerType.LASER) { speed = 20; soundType = 'LASER'; }
-          if (tower.type === TowerType.FROST) { effect = 'FREEZE'; soundType = 'LASER'; }
-          if (tower.type === TowerType.SHOCK) { effect = 'SHOCK'; soundType = 'LASER'; }
-          
-          audioService.playShoot(soundType);
+          if (target) {
+              tower.rotation = Math.atan2(target.position.y - tower.position.y, target.position.x - tower.position.x);
+          }
 
-          projectilesRef.current.push({
-            id: Math.random().toString(),
-            position: { ...tower.position },
-            targetId: target.id,
-            damage: tower.damage,
-            speed: speed,
-            color: color,
-            radius: 4,
-            hasHit: false,
-            type: pType,
-            blastRadius: blast,
-            effect: effect
-          });
+          if (tower.lastShotFrame + tower.cooldown <= state.gameTime) {
+            if (target) {
+              tower.lastShotFrame = state.gameTime;
+              
+              let pType: 'SINGLE' | 'AOE' = 'SINGLE';
+              let blast = 0;
+              let effect: 'FREEZE' | 'SHOCK' | undefined = undefined;
+              let speed = 10;
+              let color = TOWER_TYPES[tower.type].color;
+              let soundType: 'LASER' | 'HEAVY' | 'NORMAL' = 'NORMAL';
+
+              if (tower.type === TowerType.AOE) { pType = 'AOE'; blast = 60 + (tower.level * 10); soundType = 'HEAVY'; }
+              if (tower.type === TowerType.MISSILE) { pType = 'AOE'; blast = 80 + (tower.level * 15); speed = 4; soundType = 'HEAVY'; }
+              if (tower.type === TowerType.LASER) { speed = 20; soundType = 'LASER'; }
+              if (tower.type === TowerType.FROST) { effect = 'FREEZE'; soundType = 'LASER'; }
+              if (tower.type === TowerType.SHOCK) { effect = 'SHOCK'; soundType = 'LASER'; }
+              
+              if (loop === 0) audioService.playShoot(soundType); // Only play sound on first loop iter to avoid spam
+
+              projectilesRef.current.push({
+                id: Math.random().toString(),
+                position: { ...tower.position },
+                targetId: target.id,
+                damage: tower.damage,
+                speed: speed,
+                color: color,
+                radius: 4,
+                hasHit: false,
+                type: pType,
+                blastRadius: blast,
+                effect: effect
+              });
+            }
+          }
+        });
+
+        for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
+          const p = projectilesRef.current[i];
+          const target = enemiesRef.current.find(e => e.id === p.targetId);
+          if (!target) {
+            projectilesRef.current.splice(i, 1);
+            continue;
+          }
+          const dist = distance(p.position, target.position);
+          if (dist <= p.speed) {
+            // Hit logic
+            if (p.type === 'AOE' && p.blastRadius) {
+               if (loop === 0) audioService.playExplosion();
+               spawnParticle(p.position, '#f97316', 12);
+               enemiesRef.current.forEach(e => {
+                 if (distance(e.position, p.position) <= p.blastRadius!) {
+                     e.hp -= p.damage;
+                     spawnFloatingText(e.position, Math.floor(p.damage).toString(), '#fff');
+                     if (p.effect === 'FREEZE') e.frozen = 40;
+                 }
+               });
+            } else {
+               if (loop === 0) audioService.playImpact();
+               target.hp -= p.damage;
+               spawnFloatingText(target.position, Math.floor(p.damage).toString(), '#fff');
+               if (p.effect === 'FREEZE') target.frozen = 40;
+               spawnParticle(p.position, p.color, 4);
+            }
+            projectilesRef.current.splice(i, 1);
+          } else {
+            const angle = Math.atan2(target.position.y - p.position.y, target.position.x - p.position.x);
+            p.position.x += Math.cos(angle) * p.speed;
+            p.position.y += Math.sin(angle) * p.speed;
+          }
         }
-      }
-    });
 
-    for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
-      const p = projectilesRef.current[i];
-      const target = enemiesRef.current.find(e => e.id === p.targetId);
-      if (!target) {
-        projectilesRef.current.splice(i, 1);
-        continue;
-      }
-      const dist = distance(p.position, target.position);
-      if (dist <= p.speed) {
-        // Hit logic
-        if (p.type === 'AOE' && p.blastRadius) {
-           audioService.playExplosion();
-           spawnParticle(p.position, '#f97316', 12);
-           enemiesRef.current.forEach(e => {
-             if (distance(e.position, p.position) <= p.blastRadius!) {
-                 e.hp -= p.damage;
-                 if (p.effect === 'FREEZE') e.frozen = 40;
-             }
-           });
-        } else {
-           audioService.playImpact();
-           target.hp -= p.damage;
-           if (p.effect === 'FREEZE') target.frozen = 40;
-           spawnParticle(p.position, p.color, 4);
+        for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
+          if (enemiesRef.current[i].hp <= 0) {
+            state.money += enemiesRef.current[i].moneyReward;
+            spawnFloatingText(enemiesRef.current[i].position, `+$${enemiesRef.current[i].moneyReward}`, '#fbbf24');
+            spawnParticle(enemiesRef.current[i].position, '#cbd5e1', 8);
+            enemiesRef.current.splice(i, 1);
+          }
         }
-        projectilesRef.current.splice(i, 1);
-      } else {
-        const angle = Math.atan2(target.position.y - p.position.y, target.position.x - p.position.x);
-        p.position.x += Math.cos(angle) * p.speed;
-        p.position.y += Math.sin(angle) * p.speed;
-      }
-    }
 
-    for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
-      if (enemiesRef.current[i].hp <= 0) {
-        state.money += enemiesRef.current[i].moneyReward;
-        spawnParticle(enemiesRef.current[i].position, '#cbd5e1', 8);
-        enemiesRef.current.splice(i, 1);
-      }
-    }
+        for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+          const p = particlesRef.current[i];
+          p.life -= 0.05;
+          p.position.x += p.velocity.x;
+          p.position.y += p.velocity.y;
+          if (p.life <= 0) particlesRef.current.splice(i, 1);
+        }
 
-    for (let i = particlesRef.current.length - 1; i >= 0; i--) {
-      const p = particlesRef.current[i];
-      p.life -= 0.05;
-      p.position.x += p.velocity.x;
-      p.position.y += p.velocity.y;
-      if (p.life <= 0) particlesRef.current.splice(i, 1);
+        for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
+           const ft = floatingTextsRef.current[i];
+           ft.life -= 0.02;
+           ft.position.x += ft.velocity.x;
+           ft.position.y += ft.velocity.y;
+           if (ft.life <= 0) floatingTextsRef.current.splice(i, 1);
+        }
     }
 
     if (state.gameTime % 5 === 0) {
@@ -489,6 +521,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
          for(let i=0; i<6; i++) ctx.lineTo(16 * Math.cos(i * Math.PI / 3), 16 * Math.sin(i * Math.PI / 3));
          ctx.fill();
     }
+    
+    // Level Indicator (Chevrons on base)
+    ctx.fillStyle = '#fbbf24'; // Gold
+    for(let i=0; i<tower.level; i++) {
+        ctx.beginPath();
+        ctx.arc(10, 10 - (i*5), 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
     ctx.shadowBlur = 0;
 
     // Rotate Context for Turret
@@ -636,6 +677,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     // 3. Towers
     towersRef.current.forEach(tower => {
         drawTower(ctx, tower);
+        // Draw selection ring
+        if (selectedPlacedTowerId === tower.id) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 2;
+            ctx.arc(tower.position.x, tower.position.y, 24, 0, Math.PI * 2);
+            ctx.stroke();
+            // Draw Range
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = 'rgba(251, 191, 36, 0.1)';
+            ctx.arc(tower.position.x, tower.position.y, tower.range, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        }
     });
 
     // 4. Enemies
@@ -736,14 +793,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       ctx.fillStyle = p.color;
       ctx.beginPath(); ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2); ctx.fill();
     });
+
+    // 7. Floating Text
+    ctx.font = "bold 12px Inter";
+    ctx.textAlign = "center";
+    floatingTextsRef.current.forEach(ft => {
+        ctx.globalAlpha = ft.life;
+        ctx.fillStyle = ft.color;
+        ctx.fillText(ft.text, ft.position.x, ft.position.y);
+    });
+
     ctx.globalAlpha = 1.0;
 
-    // 7. Preview
-    if (mousePosRef.current && selectedTower) {
+    // 8. Preview
+    if (mousePosRef.current && selectedTowerType) {
         const { x, y } = mousePosRef.current;
         const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-        const config = TOWER_TYPES[selectedTower];
+        const config = TOWER_TYPES[selectedTowerType];
         const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 25, currentMap.waypoints);
         
         ctx.beginPath();
@@ -759,7 +826,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         ctx.beginPath(); ctx.arc(gx, gy, 14, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = 1.0;
     }
-  }, [selectedTower, currentMap]);
+  }, [selectedTowerType, selectedPlacedTowerId, currentMap]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -778,7 +845,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!selectedTower || gameStateRef.current.isGameOver || !hasStartedGame) return;
+    if (gameStateRef.current.isGameOver || !hasStartedGame) return;
     (e.target as Element).setPointerCapture(e.pointerId);
     isPointerDownRef.current = true;
     mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY);
@@ -792,13 +859,30 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     isPointerDownRef.current = false;
     (e.target as Element).releasePointerCapture(e.pointerId);
 
-    if (!selectedTower || gameStateRef.current.isGameOver || !hasStartedGame) return;
+    if (gameStateRef.current.isGameOver || !hasStartedGame) return;
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos) return; 
     
+    // Check if clicked on existing tower
+    const clickedTower = towersRef.current.find(t => distance(t.position, pos) < 20);
+    
+    if (clickedTower) {
+        setSelectedPlacedTowerId(clickedTower.id);
+        setSelectedTowerType(null); // Cancel placement if selecting a tower
+        triggerHaptic('selection');
+        return;
+    } else {
+        // If clicking empty space, deselect tower unless we are placing
+        if (!selectedTowerType) {
+             setSelectedPlacedTowerId(null);
+        }
+    }
+
+    if (!selectedTowerType) return;
+
     const gx = Math.floor(pos.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
     const gy = Math.floor(pos.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-    const config = TOWER_TYPES[selectedTower];
+    const config = TOWER_TYPES[selectedTowerType];
     
     const isValid = gameStateRef.current.money >= config.cost 
                     && !isPointOnPath(gx, gy, 25, currentMap.waypoints) 
@@ -809,11 +893,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       gameStateRef.current.money -= config.cost;
       towersRef.current.push({
         id: Math.random().toString(), position: { x: gx, y: gy }, type: config.type,
-        range: config.range, damage: config.damage, cooldown: config.cooldown, lastShotFrame: 0, rotation: 0
+        range: config.range, damage: config.damage, cooldown: config.cooldown, lastShotFrame: 0, rotation: 0, level: 1
       });
       triggerHaptic('light');
       setUiState({ ...gameStateRef.current });
-      setSelectedTower(null); 
+      setSelectedTowerType(null); 
     } else {
       triggerHaptic('error');
     }
@@ -835,9 +919,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
   
   const resetGame = () => {
-      gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1 };
+      gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1, gameSpeed: 1 };
       setHasStartedGame(false); // Go back to map select
-      towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = [];
+      towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = []; floatingTextsRef.current = [];
       setSpawnQueue([]);
       setUiState({...gameStateRef.current});
       setAdvisorMessage("Systems reset. Awaiting command.");
@@ -851,6 +935,48 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       if (newIdx >= MAPS.length) newIdx = 0;
       setCurrentMap(MAPS[newIdx]);
       triggerHaptic('light');
+  };
+
+  const toggleGameSpeed = () => {
+      gameStateRef.current.gameSpeed = gameStateRef.current.gameSpeed === 1 ? 2 : 1;
+      setUiState({ ...gameStateRef.current });
+      triggerHaptic('selection');
+  };
+
+  // --- UPGRADE / SELL LOGIC ---
+  const getSelectedTower = () => towersRef.current.find(t => t.id === selectedPlacedTowerId);
+  const selectedTowerEntity = getSelectedTower();
+
+  const handleUpgradeTower = () => {
+    if (!selectedTowerEntity) return;
+    const upgradeCost = Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.8 * selectedTowerEntity.level);
+    
+    if (gameStateRef.current.money >= upgradeCost && selectedTowerEntity.level < 3) {
+        gameStateRef.current.money -= upgradeCost;
+        selectedTowerEntity.level++;
+        selectedTowerEntity.damage *= 1.3; // 30% damage boost
+        selectedTowerEntity.range *= 1.1; // 10% range boost
+        
+        audioService.playBuild();
+        triggerHaptic('success');
+        spawnFloatingText(selectedTowerEntity.position, "UPGRADED!", "#fbbf24");
+        setUiState({...gameStateRef.current});
+    } else {
+        triggerHaptic('error');
+    }
+  };
+
+  const handleSellTower = () => {
+    if (!selectedTowerEntity) return;
+    const sellValue = Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.7 * selectedTowerEntity.level);
+    
+    gameStateRef.current.money += sellValue;
+    towersRef.current = towersRef.current.filter(t => t.id !== selectedPlacedTowerId);
+    
+    audioService.playBuild(); // Recycling sound?
+    spawnFloatingText(selectedTowerEntity.position, `+$${sellValue}`, "#fbbf24");
+    setSelectedPlacedTowerId(null);
+    setUiState({...gameStateRef.current});
   };
 
   return (
@@ -896,6 +1022,36 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             </div>
         )}
 
+        {/* UPGRADE MENU OVERLAY */}
+        {selectedTowerEntity && !uiState.isGameOver && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-slate-600 rounded-lg p-3 flex gap-4 shadow-xl backdrop-blur-md z-10 animate-in fade-in slide-in-from-bottom-4">
+                 <div className="flex flex-col items-center border-r border-slate-700 pr-4">
+                     <span className="text-xs font-bold text-slate-400 mb-1">LEVEL {selectedTowerEntity.level}</span>
+                     <div className="font-display text-blue-400 font-bold">{TOWER_TYPES[selectedTowerEntity.type].name}</div>
+                 </div>
+                 
+                 {selectedTowerEntity.level < 3 ? (
+                     <button onClick={handleUpgradeTower} className="flex flex-col items-center justify-center gap-1 min-w-[60px] hover:bg-slate-800 rounded p-1 transition-colors group">
+                        <div className="bg-yellow-900/50 p-2 rounded-full group-hover:bg-yellow-900/80 transition-colors border border-yellow-700/50">
+                            <Zap size={16} className="text-yellow-400" />
+                        </div>
+                        <span className="text-[10px] font-bold text-yellow-500">-${Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.8 * selectedTowerEntity.level)}</span>
+                     </button>
+                 ) : (
+                     <div className="flex flex-col items-center justify-center min-w-[60px] opacity-50">
+                         <span className="text-xs font-bold text-yellow-500">MAX</span>
+                     </div>
+                 )}
+
+                 <button onClick={handleSellTower} className="flex flex-col items-center justify-center gap-1 min-w-[60px] hover:bg-slate-800 rounded p-1 transition-colors group">
+                    <div className="bg-red-900/50 p-2 rounded-full group-hover:bg-red-900/80 transition-colors border border-red-700/50">
+                        <Trash2 size={16} className="text-red-400" />
+                    </div>
+                    <span className="text-[10px] font-bold text-red-400">+${Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.7 * selectedTowerEntity.level)}</span>
+                 </button>
+            </div>
+        )}
+
         {uiState.isGameOver && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center rounded-xl z-20">
                 <h2 className="text-3xl lg:text-5xl font-display text-red-500 mb-4 animate-pulse">MISSION FAILED</h2>
@@ -912,10 +1068,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             <div className="flex justify-between items-center w-full">
                 <div className="flex flex-col">
                   <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-slate-200 to-slate-400 whitespace-nowrap">
-                    PLANET DEFENSE <span className="text-[10px] text-yellow-500 ml-1 font-mono">v1.0</span>
+                    PLANET DEFENSE <span className="text-[10px] text-yellow-500 ml-1 font-mono">v1.0 PRO</span>
                   </h1>
                   {userName && <span className="text-xs text-blue-400 font-mono truncate max-w-[200px]">Cmdr. {userName}</span>}
                 </div>
+                <button 
+                  onClick={toggleGameSpeed}
+                  className={`p-2 rounded flex items-center gap-1 font-bold text-xs transition-colors border ${uiState.gameSpeed === 2 ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-700 border-slate-600 text-slate-400'}`}
+                >
+                    <FastForward size={16} /> {uiState.gameSpeed}x
+                </button>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 w-full">
                 <div className="bg-slate-900 p-2 rounded-sm border-l-2 border-red-500 flex items-center gap-2 justify-center">
@@ -955,9 +1117,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                 {Object.values(TOWER_TYPES).map(tower => (
                     <button
                         key={tower.type}
-                        onClick={() => { setSelectedTower(selectedTower === tower.type ? null : tower.type); triggerHaptic('light'); }}
+                        onClick={() => { 
+                            setSelectedTowerType(selectedTowerType === tower.type ? null : tower.type); 
+                            setSelectedPlacedTowerId(null); // Deselect placed tower
+                            triggerHaptic('light'); 
+                        }}
                         className={`min-w-[100px] p-2 rounded-sm border-b-4 flex flex-col items-center gap-1 transition shrink-0 relative
-                            ${selectedTower === tower.type 
+                            ${selectedTowerType === tower.type 
                                 ? 'border-b-blue-500 bg-slate-700 border-t border-l border-r border-slate-600 shadow-[0_0_15px_rgba(59,130,246,0.2)]' 
                                 : 'border-b-black bg-slate-900 border-t border-l border-r border-slate-800'}`}
                     >

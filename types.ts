@@ -56,6 +56,7 @@ export interface Enemy extends Entity {
 
 export interface Tower extends Entity {
   type: TowerType;
+  level: number; // 1, 2, or 3
   lastShotFrame: number;
   range: number;
   damage: number;
@@ -85,6 +86,15 @@ export interface Particle {
   size: number;
 }
 
+export interface FloatingText {
+  id: string;
+  position: Vector2D;
+  text: string;
+  life: number; // 0 to 1
+  color: string;
+  velocity: Vector2D;
+}
+
 export interface GameState {
   money: number;
   lives: number;
@@ -93,6 +103,7 @@ export interface GameState {
   isGameOver: boolean;
   gameTime: number; // Total frames
   autoStartTimer: number; // Frames until next wave
+  gameSpeed: number; // 1 or 2
 }
 
 export interface WaveConfig {
