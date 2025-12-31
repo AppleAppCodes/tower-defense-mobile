@@ -1,20 +1,58 @@
-import { EnemyType, TowerType, TowerConfig, Vector2D } from './types';
+import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition } from './types';
 
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
 export const GRID_SIZE = 40;
 export const AUTO_START_DELAY = 600; // 10 seconds at 60fps
 
-// Simple winding path
-export const PATH_WAYPOINTS: Vector2D[] = [
-  { x: 0, y: 100 },
-  { x: 200, y: 100 },
-  { x: 200, y: 400 },
-  { x: 500, y: 400 },
-  { x: 500, y: 200 },
-  { x: 700, y: 200 },
-  { x: 700, y: 500 },
-  { x: 800, y: 500 }, // End point
+export const MAPS: MapDefinition[] = [
+  {
+    id: 'canyon',
+    name: 'Canyon Run',
+    difficulty: 'EASY',
+    waypoints: [
+      { x: 0, y: 100 },
+      { x: 200, y: 100 },
+      { x: 200, y: 400 },
+      { x: 500, y: 400 },
+      { x: 500, y: 200 },
+      { x: 700, y: 200 },
+      { x: 700, y: 500 },
+      { x: 800, y: 500 },
+    ]
+  },
+  {
+    id: 'omega',
+    name: 'Omega Loop',
+    difficulty: 'MEDIUM',
+    waypoints: [
+      { x: 0, y: 300 },
+      { x: 200, y: 300 },
+      { x: 200, y: 100 },
+      { x: 600, y: 100 },
+      { x: 600, y: 500 },
+      { x: 200, y: 500 },
+      { x: 200, y: 300 }, // The Loop closes here near start
+      { x: 800, y: 300 },
+    ]
+  },
+  {
+    id: 'zigzag',
+    name: 'Zig Zag',
+    difficulty: 'HARD',
+    waypoints: [
+      { x: 40, y: 0 },
+      { x: 40, y: 500 },
+      { x: 200, y: 500 },
+      { x: 200, y: 100 },
+      { x: 360, y: 100 },
+      { x: 360, y: 500 },
+      { x: 520, y: 500 },
+      { x: 520, y: 100 },
+      { x: 680, y: 100 },
+      { x: 680, y: 600 },
+    ]
+  }
 ];
 
 export const TOWER_TYPES: Record<TowerType, TowerConfig> = {

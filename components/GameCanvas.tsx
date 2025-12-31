@@ -1,19 +1,19 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, PATH_WAYPOINTS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY } from '../constants';
+import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY } from '../constants';
 import { getTacticalAdvice } from '../services/geminiService';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Bot, Play, RefreshCw, Rocket, Timer } from 'lucide-react';
+import { Heart, Coins, Shield, Bot, Play, RefreshCw, Rocket, Timer, Map as MapIcon, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
 }
 
-// Helper for path collision
-const isPointOnPath = (x: number, y: number, width: number) => {
-  for (let i = 0; i < PATH_WAYPOINTS.length - 1; i++) {
-      const p1 = PATH_WAYPOINTS[i];
-      const p2 = PATH_WAYPOINTS[i+1];
+// Helper for path collision (updated to accept dynamic waypoints)
+const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[]) => {
+  for (let i = 0; i < waypoints.length - 1; i++) {
+      const p1 = waypoints[i];
+      const p2 = waypoints[i+1];
       
       const A = x - p1.x;
       const B = y - p1.y;
@@ -118,6 +118,22 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
   }
 };
 
+const MapPreviewSVG = ({ map }: { map: MapDefinition }) => {
+    const scaleX = 100 / CANVAS_WIDTH;
+    const scaleY = 60 / CANVAS_HEIGHT;
+    
+    let pathData = `M ${map.waypoints[0].x * scaleX} ${map.waypoints[0].y * scaleY}`;
+    for (let i = 1; i < map.waypoints.length; i++) {
+        pathData += ` L ${map.waypoints[i].x * scaleX} ${map.waypoints[i].y * scaleY}`;
+    }
+
+    return (
+        <svg width="100" height="60" viewBox="0 0 100 60" className="bg-slate-800 rounded border border-slate-600">
+            <path d={pathData} stroke="#3b82f6" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+};
+
 const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mousePosRef = useRef<Vector2D | null>(null);
@@ -142,10 +158,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
-  const [advisorMessage, setAdvisorMessage] = useState<string>("Planetary defense systems online. Select a unit to deploy.");
+  const [advisorMessage, setAdvisorMessage] = useState<string>("Planetary defense systems online. Select a mission.");
   const [isAdvisorLoading, setIsAdvisorLoading] = useState(false);
   const [spawnQueue, setSpawnQueue] = useState<{ type: EnemyType; delay: number }[]>([]);
   const [userName, setUserName] = useState<string>("");
+  const [currentMap, setCurrentMap] = useState<MapDefinition>(MAPS[0]);
+  const [hasStartedGame, setHasStartedGame] = useState(false);
 
   const distance = (a: Vector2D, b: Vector2D) => Math.hypot(a.x - b.x, a.y - b.y);
   
@@ -212,6 +230,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const handleStartWave = useCallback(() => {
     if (!gameStateRef.current.isPlaying) {
+        setHasStartedGame(true);
         gameStateRef.current.isPlaying = true;
         gameStateRef.current.autoStartTimer = -1; 
         startWave(gameStateRef.current.wave);
@@ -232,14 +251,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         mainBtn.color = "#ef4444";
         mainBtn.show();
       } else if (!uiState.isPlaying) {
-        if (uiState.autoStartTimer > 0) {
+        if (!hasStartedGame) {
+             mainBtn.hide(); // Hide during map selection
+        } else if (uiState.autoStartTimer > 0) {
             mainBtn.setText(`NEXT WAVE IN ${Math.ceil(uiState.autoStartTimer / 60)}s`);
             mainBtn.color = "#eab308";
+            mainBtn.show();
         } else {
             mainBtn.setText(`START WAVE ${uiState.wave}`);
             mainBtn.color = "#22c55e";
+            mainBtn.show();
         }
-        mainBtn.show();
       } else {
         mainBtn.hide();
       }
@@ -257,7 +279,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       mainBtn.offClick(onMainBtnClick);
       mainBtn.hide();
     };
-  }, [uiState.isPlaying, uiState.isGameOver, uiState.wave, uiState.autoStartTimer, handleStartWave]);
+  }, [uiState.isPlaying, uiState.isGameOver, uiState.wave, uiState.autoStartTimer, handleStartWave, hasStartedGame]);
 
   const update = useCallback(() => {
     const state = gameStateRef.current;
@@ -282,7 +304,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           const stats = ENEMY_STATS[nextEnemy.type];
           enemiesRef.current.push({
             id: Math.random().toString(36),
-            position: { ...PATH_WAYPOINTS[0] },
+            position: { ...currentMap.waypoints[0] }, // Spawn at current map start
             type: nextEnemy.type,
             hp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
             maxHp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
@@ -310,7 +332,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
     for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
       const enemy = enemiesRef.current[i];
-      const target = PATH_WAYPOINTS[enemy.pathIndex + 1];
+      const target = currentMap.waypoints[enemy.pathIndex + 1]; // Use current map
       if (!target) {
         state.lives--;
         triggerHaptic('error');
@@ -442,7 +464,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     if (state.gameTime % 5 === 0) {
       setUiState({ ...state });
     }
-  }, [spawnQueue, onGameOver, handleStartWave]);
+  }, [spawnQueue, onGameOver, handleStartWave, currentMap]);
 
   const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower) => {
     ctx.save();
@@ -595,8 +617,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(PATH_WAYPOINTS[0].x, PATH_WAYPOINTS[0].y);
-    for (let i = 1; i < PATH_WAYPOINTS.length; i++) ctx.lineTo(PATH_WAYPOINTS[i].x, PATH_WAYPOINTS[i].y);
+    // USE CURRENT MAP WAYPOINTS
+    ctx.moveTo(currentMap.waypoints[0].x, currentMap.waypoints[0].y);
+    for (let i = 1; i < currentMap.waypoints.length; i++) ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
     ctx.stroke();
 
     ctx.strokeStyle = '#334155';
@@ -617,7 +640,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
     // 4. Enemies
     enemiesRef.current.forEach(enemy => {
-        const target = PATH_WAYPOINTS[enemy.pathIndex + 1];
+        const target = currentMap.waypoints[enemy.pathIndex + 1]; // Use current map
         let angle = 0;
         if (target) {
             angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
@@ -721,7 +744,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const config = TOWER_TYPES[selectedTower];
-        const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 25);
+        const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 25, currentMap.waypoints);
         
         ctx.beginPath();
         ctx.fillStyle = isValid ? 'rgba(59, 130, 246, 0.15)' : 'rgba(239, 68, 68, 0.15)';
@@ -736,7 +759,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         ctx.beginPath(); ctx.arc(gx, gy, 14, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = 1.0;
     }
-  }, [selectedTower]);
+  }, [selectedTower, currentMap]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -755,7 +778,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!selectedTower || gameStateRef.current.isGameOver) return;
+    if (!selectedTower || gameStateRef.current.isGameOver || !hasStartedGame) return;
     (e.target as Element).setPointerCapture(e.pointerId);
     isPointerDownRef.current = true;
     mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY);
@@ -769,7 +792,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     isPointerDownRef.current = false;
     (e.target as Element).releasePointerCapture(e.pointerId);
 
-    if (!selectedTower || gameStateRef.current.isGameOver) return;
+    if (!selectedTower || gameStateRef.current.isGameOver || !hasStartedGame) return;
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos) return; 
     
@@ -778,7 +801,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const config = TOWER_TYPES[selectedTower];
     
     const isValid = gameStateRef.current.money >= config.cost 
-                    && !isPointOnPath(gx, gy, 25) 
+                    && !isPointOnPath(gx, gy, 25, currentMap.waypoints) 
                     && !towersRef.current.some(t => distance(t.position, {x: gx, y: gy}) < 20);
 
     if (isValid) {
@@ -813,11 +836,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   
   const resetGame = () => {
       gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1 };
+      setHasStartedGame(false); // Go back to map select
       towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = [];
       setSpawnQueue([]);
       setUiState({...gameStateRef.current});
       setAdvisorMessage("Systems reset. Awaiting command.");
       triggerHaptic('medium');
+  };
+
+  const changeMap = (direction: 'next' | 'prev') => {
+      const idx = MAPS.findIndex(m => m.id === currentMap.id);
+      let newIdx = direction === 'next' ? idx + 1 : idx - 1;
+      if (newIdx < 0) newIdx = MAPS.length - 1;
+      if (newIdx >= MAPS.length) newIdx = 0;
+      setCurrentMap(MAPS[newIdx]);
+      triggerHaptic('light');
   };
 
   return (
@@ -833,17 +866,31 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           className="block bg-[#0f172a] rounded-xl shadow-2xl border border-slate-700 cursor-crosshair"
         />
         
-        {!uiState.isPlaying && !uiState.isGameOver && uiState.wave === 1 && (
-            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-[2px]">
-                <div className="bg-slate-900/95 p-6 rounded-2xl border border-blue-500/50 text-center shadow-[0_0_50px_rgba(59,130,246,0.2)] max-w-[90%]">
-                    <Rocket size={40} className="text-blue-400 mx-auto mb-3 animate-bounce" />
-                    <h2 className="text-xl font-display text-white mb-2">PLANET DEFENSE</h2>
-                    <p className="text-slate-400 mb-4 text-xs">Defend the colony supply route.</p>
+        {/* START SCREEN & MAP SELECT */}
+        {!hasStartedGame && !uiState.isPlaying && !uiState.isGameOver && (
+            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-sm">
+                <div className="bg-slate-900/95 p-6 rounded-2xl border border-blue-500/50 text-center shadow-[0_0_50px_rgba(59,130,246,0.2)] w-[320px]">
+                    <h2 className="text-xl font-display text-white mb-1">SELECT SECTOR</h2>
+                    <p className="text-slate-400 mb-4 text-xs">Choose battlefield topography</p>
+                    
+                    <div className="flex items-center justify-between mb-4">
+                        <button onClick={() => changeMap('prev')} className="p-2 text-slate-400 hover:text-white"><ChevronLeft /></button>
+                        <div className="flex flex-col items-center gap-2">
+                             <MapPreviewSVG map={currentMap} />
+                             <div className="font-bold text-lg text-blue-400">{currentMap.name}</div>
+                             <div className={`text-xs px-2 py-0.5 rounded ${
+                                 currentMap.difficulty === 'EASY' ? 'bg-green-900 text-green-300' : 
+                                 currentMap.difficulty === 'MEDIUM' ? 'bg-yellow-900 text-yellow-300' : 'bg-red-900 text-red-300'
+                             }`}>{currentMap.difficulty}</div>
+                        </div>
+                        <button onClick={() => changeMap('next')} className="p-2 text-slate-400 hover:text-white"><ChevronRight /></button>
+                    </div>
+
                     <button 
                       onClick={handleStartWave}
-                      className="px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-sm font-bold transition-all flex items-center gap-2 mx-auto text-sm border-b-4 border-emerald-900"
+                      className="w-full px-6 py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-sm font-bold transition-all flex items-center justify-center gap-2 mx-auto text-sm border-b-4 border-emerald-900"
                     >
-                        <Play size={18} /> INITIATE
+                        <Play size={18} /> DEPLOY
                     </button>
                 </div>
             </div>
@@ -865,7 +912,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             <div className="flex justify-between items-center w-full">
                 <div className="flex flex-col">
                   <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-slate-200 to-slate-400 whitespace-nowrap">
-                    PLANET DEFENSE <span className="text-[10px] text-yellow-500 ml-1 font-mono">v0.98 BETA</span>
+                    PLANET DEFENSE <span className="text-[10px] text-yellow-500 ml-1 font-mono">v1.0</span>
                   </h1>
                   {userName && <span className="text-xs text-blue-400 font-mono truncate max-w-[200px]">Cmdr. {userName}</span>}
                 </div>

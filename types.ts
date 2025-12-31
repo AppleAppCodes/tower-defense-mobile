@@ -29,6 +29,13 @@ export interface TowerConfig {
   description: string;
 }
 
+export interface MapDefinition {
+  id: string;
+  name: string;
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  waypoints: Vector2D[];
+}
+
 export interface Entity {
   id: string;
   position: Vector2D;
