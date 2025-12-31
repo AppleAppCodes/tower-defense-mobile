@@ -453,28 +453,27 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 p-2 lg:p-4 max-w-7xl mx-auto h-full overflow-hidden">
-      <div className="relative group flex-shrink-0 mx-auto w-full lg:w-auto flex justify-center items-center">
+    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 p-2 lg:p-4 w-full max-w-[100vw] mx-auto h-full overflow-hidden box-border">
+      <div className="relative group flex-shrink-0 mx-auto w-full lg:w-auto flex justify-center items-center overflow-hidden">
         <canvas 
           ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
           onClick={handleCanvasClick}
           onMouseMove={(e) => mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY)}
           onMouseLeave={() => mousePosRef.current = null}
-          style={{ width: '100%', height: 'auto', maxHeight: '60vh' }}
-          className="block bg-slate-950 rounded-xl shadow-2xl border border-slate-800 cursor-crosshair object-contain"
+          style={{ width: '100%', height: 'auto', maxHeight: '55vh', objectFit: 'contain' }}
+          className="block bg-slate-950 rounded-xl shadow-2xl border border-slate-800 cursor-crosshair"
         />
         
         {!uiState.isPlaying && !uiState.isGameOver && uiState.wave === 1 && (
             <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-[2px]">
-                <div className="bg-slate-900/90 p-8 rounded-2xl border border-blue-500/50 text-center shadow-[0_0_50px_rgba(59,130,246,0.2)]">
-                    <Rocket size={48} className="text-blue-400 mx-auto mb-4 animate-bounce" />
-                    <h2 className="text-2xl font-display text-white mb-2">READY, COMMANDER?</h2>
-                    <p className="text-slate-400 mb-6 text-sm">Build defenses or start the first wave.</p>
+                <div className="bg-slate-900/90 p-6 rounded-2xl border border-blue-500/50 text-center shadow-[0_0_50px_rgba(59,130,246,0.2)] max-w-[90%]">
+                    <Rocket size={40} className="text-blue-400 mx-auto mb-3 animate-bounce" />
+                    <h2 className="text-xl font-display text-white mb-2">READY?</h2>
                     <button 
                       onClick={handleStartWave}
-                      className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold transition-all transform hover:scale-105 flex items-center gap-2 mx-auto"
+                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold transition-all transform hover:scale-105 flex items-center gap-2 mx-auto text-sm"
                     >
-                        <Play size={20} /> START MISSION
+                        <Play size={18} /> START
                     </button>
                 </div>
             </div>
@@ -491,33 +490,33 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         )}
       </div>
 
-      <div className="flex-1 flex flex-col gap-2 lg:gap-4 overflow-y-auto pb-24 lg:pb-0">
-        <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex flex-col gap-2 lg:gap-4">
-            <div className="flex justify-between items-center">
+      <div className="flex-1 flex flex-col gap-2 lg:gap-4 overflow-y-auto pb-24 lg:pb-0 w-full min-w-0">
+        <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex flex-col gap-2 lg:gap-4 w-full">
+            <div className="flex justify-between items-center w-full">
                 <div className="flex flex-col">
-                  <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                    NEON DEFENSE <span className="text-[10px] text-slate-500 ml-1 font-mono">v1.2</span>
+                  <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 whitespace-nowrap">
+                    NEON DEFENSE <span className="text-[10px] text-slate-500 ml-1 font-mono">v1.3</span>
                   </h1>
-                  {userName && <span className="text-xs text-blue-400 font-mono">Cmdr. {userName}</span>}
+                  {userName && <span className="text-xs text-blue-400 font-mono truncate max-w-[200px]">Cmdr. {userName}</span>}
                 </div>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
-                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col items-center lg:flex-row gap-1 lg:gap-3">
-                    <Heart className="text-red-500 w-4 h-4" />
-                    <div className="text-sm lg:text-xl font-bold">{uiState.lives}</div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 w-full">
+                <div className="bg-slate-900 p-2 rounded-lg flex items-center gap-2 justify-center">
+                    <Heart className="text-red-500 w-4 h-4 shrink-0" />
+                    <div className="text-sm font-bold">{uiState.lives}</div>
                 </div>
-                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col items-center lg:flex-row gap-1 lg:gap-3">
-                    <Coins className="text-yellow-400 w-4 h-4" />
-                    <div className="text-sm lg:text-xl font-bold">{uiState.money}</div>
+                <div className="bg-slate-900 p-2 rounded-lg flex items-center gap-2 justify-center">
+                    <Coins className="text-yellow-400 w-4 h-4 shrink-0" />
+                    <div className="text-sm font-bold">{uiState.money}</div>
                 </div>
-                <div className="bg-slate-900 p-2 lg:p-3 rounded-lg flex flex-col items-center lg:flex-row gap-1 lg:gap-3">
-                    <Shield className="text-emerald-400 w-4 h-4" />
-                    <div className="text-sm lg:text-xl font-bold">{uiState.wave}</div>
+                <div className="bg-slate-900 p-2 rounded-lg flex items-center gap-2 justify-center">
+                    <Shield className="text-emerald-400 w-4 h-4 shrink-0" />
+                    <div className="text-sm font-bold">{uiState.wave}</div>
                 </div>
                 <button 
                   onClick={handleStartWave}
                   disabled={uiState.isPlaying} 
-                  className={`p-2 lg:p-3 rounded-lg flex items-center justify-center gap-2 font-bold transition
+                  className={`p-2 rounded-lg flex items-center justify-center gap-2 font-bold transition
                     ${uiState.isPlaying ? 'bg-slate-700 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.4)]'}`}
                 >
                     <Play size={18} />
@@ -525,28 +524,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             </div>
         </div>
 
-        <div className="bg-slate-800 p-2 lg:p-4 rounded-xl border border-slate-700">
+        <div className="bg-slate-800 p-2 lg:p-4 rounded-xl border border-slate-700 w-full min-w-0">
             <h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Arsenal</h3>
-            <div className="flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0">
+            <div className="flex gap-2 overflow-x-auto pb-2 w-full min-w-0 scrollbar-hide">
                 {Object.values(TOWER_TYPES).map(tower => (
                     <button
                         key={tower.type}
                         onClick={() => { setSelectedTower(selectedTower === tower.type ? null : tower.type); triggerHaptic('light'); }}
-                        className={`min-w-[120px] lg:min-w-0 p-2 lg:p-3 rounded-lg border flex flex-col lg:flex-row items-center gap-2 transition
+                        className={`min-w-[100px] p-2 rounded-lg border flex flex-col items-center gap-1 transition shrink-0
                             ${selectedTower === tower.type ? 'border-blue-500 bg-slate-700' : 'border-slate-700 bg-slate-900'}`}
                     >
-                        <div className="w-6 h-6 lg:w-8 lg:h-8 rounded" style={{ backgroundColor: tower.color }} />
-                        <div className="text-xs lg:text-sm font-bold flex flex-col lg:flex-row lg:justify-between w-full">
-                            {tower.name} <span className="text-yellow-400">${tower.cost}</span>
+                        <div className="w-6 h-6 rounded" style={{ backgroundColor: tower.color }} />
+                        <div className="text-xs font-bold text-center w-full truncate">
+                            {tower.name}
                         </div>
+                        <div className="text-xs text-yellow-400">${tower.cost}</div>
                     </button>
                 ))}
             </div>
         </div>
 
-        <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex-1 min-h-[100px]">
+        <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex-1 min-h-[100px] w-full">
              <h3 className="text-purple-400 text-xs font-bold uppercase mb-2 flex items-center gap-2"><Bot size={14} /> AI Advisor</h3>
-             <div className="bg-slate-900/50 p-2 rounded-lg text-xs lg:text-sm text-slate-300 italic mb-2">"{advisorMessage}"</div>
+             <div className="bg-slate-900/50 p-2 rounded-lg text-xs lg:text-sm text-slate-300 italic mb-2 break-words">"{advisorMessage}"</div>
              <button onClick={handleConsultAI} disabled={isAdvisorLoading} className="w-full py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/50 text-purple-300 rounded text-xs font-bold transition">
                  {isAdvisorLoading ? "Analyzing..." : "Request Analysis"}
              </button>
