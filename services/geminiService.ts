@@ -41,7 +41,7 @@ export const getTacticalAdvice = async (gameState: GameState, towers: Tower[]): 
       contents: prompt,
     });
 
-    return response.text.trim();
+    return response.text?.trim() ?? "No advice available.";
   } catch (error) {
     console.error("Gemini API Error:", error);
     return "Tactical communications offline. Rely on your instincts, Commander.";

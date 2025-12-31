@@ -8,13 +8,12 @@ interface GameCanvasProps {
   onGameOver: (wave: number) => void;
 }
 
-// Helper for path collision - defined outside component to be reused easily
+// Helper for path collision
 const isPointOnPath = (x: number, y: number, width: number) => {
   for (let i = 0; i < PATH_WAYPOINTS.length - 1; i++) {
       const p1 = PATH_WAYPOINTS[i];
       const p2 = PATH_WAYPOINTS[i+1];
       
-      // Dist point to line segment
       const A = x - p1.x;
       const B = y - p1.y;
       const C = p2.x - p1.x;
@@ -51,7 +50,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mousePosRef = useRef<Vector2D | null>(null);
   
-  // Mutable Game State (Refs for performance)
+  // Mutable Game State
   const gameStateRef = useRef<GameState>({
     money: 120,
     lives: 20,
@@ -66,16 +65,30 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   
-  // React State for UI updates (updated less frequently)
+  // UI State
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTower, setSelectedTower] = useState<TowerType | null>(null);
   const [advisorMessage, setAdvisorMessage] = useState<string>("Welcome Commander. Systems online.");
   const [isAdvisorLoading, setIsAdvisorLoading] = useState(false);
   const [spawnQueue, setSpawnQueue] = useState<{ type: EnemyType; delay: number }[]>([]);
+  
+  // Telegram User Data
+  const [userName, setUserName] = useState<string>("");
 
   // Helpers
   const distance = (a: Vector2D, b: Vector2D) => Math.hypot(a.x - b.x, a.y - b.y);
   
+  // Telegram Haptics Helper
+  const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'error' | 'success') => {
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      if (type === 'error' || type === 'success') {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
+      } else {
+        window.Telegram.WebApp.HapticFeedback.impactOccurred(type);
+      }
+    }
+  };
+
   const spawnParticle = (pos: Vector2D, color: string, count: number = 5) => {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -92,8 +105,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     }
   };
 
-  const startWave = (waveNum: number) => {
-    // Simple difficulty scaling
+  const startWave = useCallback((waveNum: number) => {
     const count = 5 + Math.floor(waveNum * 1.5);
     const newQueue: { type: EnemyType; delay: number }[] = [];
     
@@ -103,10 +115,60 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       if (waveNum > 4 && i % 5 === 0) type = EnemyType.TANK;
       if (waveNum > 9 && i === count - 1) type = EnemyType.BOSS;
       
-      newQueue.push({ type, delay: i * 60 }); // 60 frames = 1 sec gap approx
+      newQueue.push({ type, delay: i * 60 });
     }
     setSpawnQueue(newQueue);
-  };
+  }, []);
+
+  const handleStartWave = useCallback(() => {
+    if (!gameStateRef.current.isPlaying) {
+        gameStateRef.current.isPlaying = true;
+        startWave(gameStateRef.current.wave);
+        triggerHaptic('medium');
+    }
+  }, [startWave]);
+
+  // Telegram Main Button Integration
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    setUserName(tg.initDataUnsafe?.user?.first_name || "Commander");
+
+    const mainBtn = tg.MainButton;
+    
+    const updateMainButton = () => {
+      if (uiState.isGameOver) {
+        mainBtn.setText("RESTART MISSION");
+        mainBtn.color = "#ef4444"; // Red
+        mainBtn.show();
+      } else if (!uiState.isPlaying) {
+        mainBtn.setText(`START WAVE ${uiState.wave}`);
+        mainBtn.color = "#22c55e"; // Green
+        mainBtn.show();
+      } else {
+        mainBtn.hide();
+      }
+    };
+
+    updateMainButton();
+
+    const onMainBtnClick = () => {
+      if (uiState.isGameOver) {
+        resetGame();
+      } else {
+        handleStartWave();
+      }
+    };
+
+    mainBtn.onClick(onMainBtnClick);
+
+    return () => {
+      mainBtn.offClick(onMainBtnClick);
+      mainBtn.hide();
+    };
+  }, [uiState.isPlaying, uiState.isGameOver, uiState.wave, handleStartWave]);
+
 
   // Game Loop
   const update = useCallback(() => {
@@ -117,8 +179,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
     // Spawning
     if (spawnQueue.length > 0) {
-      // Check if it's time to spawn the next enemy based on global time or relative delay
-      // Simplified: Just decrement delay of first item
       if (spawnQueue[0].delay <= 0) {
         const nextEnemy = spawnQueue.shift();
         if (nextEnemy) {
@@ -127,7 +187,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             id: Math.random().toString(36),
             position: { ...PATH_WAYPOINTS[0] },
             type: nextEnemy.type,
-            hp: stats.maxHp + (state.wave * stats.maxHp * 0.2), // HP Scaling
+            hp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
             maxHp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
             speed: stats.speed,
             pathIndex: 0,
@@ -144,25 +204,26 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       }
     } else if (enemiesRef.current.length === 0 && state.lives > 0) {
        // Wave cleared
+       state.isPlaying = false; // Pause between waves
        state.wave++;
-       state.money += 50; // Wave clear bonus
-       startWave(state.wave);
-       // Auto-save advice? Optional.
+       state.money += 50;
+       triggerHaptic('success');
+       // Don't auto-start next wave, let user click button
     }
 
     // Update Enemies
     for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
       const enemy = enemiesRef.current[i];
-      
-      // Move towards next waypoint
       const target = PATH_WAYPOINTS[enemy.pathIndex + 1];
+      
       if (!target) {
-        // Reached end
         state.lives--;
+        triggerHaptic('error'); // Vibrate on life lost
         enemiesRef.current.splice(i, 1);
         if (state.lives <= 0) {
           state.isGameOver = true;
           state.isPlaying = false;
+          triggerHaptic('error');
           onGameOver(state.wave);
         }
         continue;
@@ -189,11 +250,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     // Update Towers
     towersRef.current.forEach(tower => {
       if (tower.lastShotFrame + tower.cooldown <= state.gameTime) {
-        // Find target
         let target: Enemy | null = null;
         let maxDist = -1;
 
-        // Simple targeting: Furthest along path within range
         for (const enemy of enemiesRef.current) {
           const d = distance(tower.position, enemy.position);
           if (d <= tower.range) {
@@ -228,16 +287,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       const target = enemiesRef.current.find(e => e.id === p.targetId);
 
       if (!target) {
-        // Target dead/gone, remove projectile
         projectilesRef.current.splice(i, 1);
         continue;
       }
 
       const dist = distance(p.position, target.position);
       if (dist <= p.speed) {
-        // Hit
         if (p.type === 'AOE' && p.blastRadius) {
-           // Area Damage
            spawnParticle(p.position, '#f59e0b', 10);
            enemiesRef.current.forEach(e => {
              if (distance(e.position, p.position) <= p.blastRadius!) {
@@ -245,15 +301,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
              }
            });
         } else {
-           // Single Target
            target.hp -= p.damage;
-           if (target.type === EnemyType.FAST) target.frozen = 30; // Ice/Slow effect logic could go here, added to sniper for now
+           if (target.type === EnemyType.FAST) target.frozen = 30; 
            spawnParticle(p.position, p.color, 3);
         }
-        
         projectilesRef.current.splice(i, 1);
       } else {
-        // Move
         const dx = target.position.x - p.position.x;
         const dy = target.position.y - p.position.y;
         const angle = Math.atan2(dy, dx);
@@ -282,8 +335,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       }
     }
 
-    // Sync UI (throttle this in a real large app, but fine for simple TD)
-    if (state.gameTime % 5 === 0) {
+    // Sync UI
+    if (state.gameTime % 5 === 0 || !state.isPlaying) {
       setUiState({ ...state });
     }
 
@@ -297,11 +350,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     if (!ctx) return;
 
     // Clear
-    ctx.fillStyle = '#0f172a'; // Slate 900
+    ctx.fillStyle = '#020617'; // Darker Slate
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Draw Grid (Subtle)
-    ctx.strokeStyle = '#1e293b';
+    // Draw Grid (Neon Style)
+    ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
     ctx.lineWidth = 1;
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
       ctx.beginPath();
@@ -316,8 +369,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       ctx.stroke();
     }
 
-    // Draw Path
-    ctx.strokeStyle = '#334155';
+    // Draw Path with Glow
+    ctx.save();
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#3b82f6';
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.2)';
     ctx.lineWidth = 30;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -327,19 +383,35 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       ctx.lineTo(PATH_WAYPOINTS[i].x, PATH_WAYPOINTS[i].y);
     }
     ctx.stroke();
+    ctx.restore();
 
-    // Draw Path Highlight (Center)
-    ctx.strokeStyle = '#475569';
+    // Draw Path Center Line
+    ctx.strokeStyle = 'rgba(96, 165, 250, 0.5)';
     ctx.lineWidth = 2;
+    ctx.setLineDash([10, 10]);
     ctx.stroke();
+    ctx.setLineDash([]);
 
     // Draw Towers
     towersRef.current.forEach(tower => {
-      // Base
+      // Range Ring (Subtle)
+      /*
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(tower.position.x, tower.position.y, tower.range, 0, Math.PI * 2);
+      ctx.stroke();
+      */
+
+      // Base with Glow
+      ctx.save();
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = TOWER_TYPES[tower.type].color;
       ctx.fillStyle = '#1e293b';
       ctx.beginPath();
       ctx.arc(tower.position.x, tower.position.y, 16, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
       
       // Turret
       ctx.fillStyle = TOWER_TYPES[tower.type].color;
@@ -347,7 +419,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       ctx.rect(tower.position.x - 10, tower.position.y - 10, 20, 20);
       ctx.fill();
       
-      // Top Detail
+      // Energy Core
       ctx.fillStyle = '#fff';
       ctx.beginPath();
       ctx.arc(tower.position.x, tower.position.y, 6, 0, Math.PI * 2);
@@ -356,25 +428,33 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
     // Draw Enemies
     enemiesRef.current.forEach(enemy => {
+      ctx.save();
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = enemy.color;
       ctx.fillStyle = enemy.color;
       ctx.beginPath();
       ctx.arc(enemy.position.x, enemy.position.y, enemy.radius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
 
       // HP Bar
-      const hpPct = enemy.hp / enemy.maxHp;
-      ctx.fillStyle = 'red';
-      ctx.fillRect(enemy.position.x - 10, enemy.position.y - 20, 20, 4);
+      const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+      ctx.fillRect(enemy.position.x - 12, enemy.position.y - 24, 24, 4);
       ctx.fillStyle = '#22c55e';
-      ctx.fillRect(enemy.position.x - 10, enemy.position.y - 20, 20 * hpPct, 4);
+      ctx.fillRect(enemy.position.x - 12, enemy.position.y - 24, 24 * hpPct, 4);
     });
 
     // Draw Projectiles
     projectilesRef.current.forEach(p => {
+      ctx.save();
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = p.color;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(p.position.x, p.position.y, p.radius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     });
 
     // Draw Particles
@@ -392,19 +472,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         const { x, y } = mousePosRef.current;
         
         if (selectedTower) {
-             // PLACEMENT MODE
              const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
              const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
              const config = TOWER_TYPES[selectedTower];
              
-             // Check validation
              const canAfford = gameStateRef.current.money >= config.cost;
              const onPath = isPointOnPath(gx, gy, 25);
              const overlapping = towersRef.current.some(t => distance(t.position, {x: gx, y: gy}) < 20);
-             
              const isValid = canAfford && !onPath && !overlapping;
 
-             // Draw Range
              ctx.beginPath();
              ctx.fillStyle = isValid ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 50, 50, 0.1)';
              ctx.strokeStyle = isValid ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 50, 50, 0.5)';
@@ -415,16 +491,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
              ctx.stroke();
              ctx.setLineDash([]);
 
-             // Draw Ghost Tower
+             ctx.save();
+             ctx.shadowBlur = 15;
+             ctx.shadowColor = isValid ? config.color : '#ef4444';
              ctx.globalAlpha = 0.6;
-             ctx.fillStyle = isValid ? config.color : '#ef4444'; // Red if invalid
+             ctx.fillStyle = isValid ? config.color : '#ef4444';
              ctx.beginPath();
              ctx.rect(gx - 10, gy - 10, 20, 20);
              ctx.fill();
+             ctx.restore();
              
-             // Cross indicator if invalid
              if (!isValid) {
-                 ctx.strokeStyle = '#7f1d1d';
+                 ctx.strokeStyle = '#ef4444';
                  ctx.lineWidth = 2;
                  ctx.beginPath();
                  ctx.moveTo(gx - 8, gy - 8);
@@ -433,24 +511,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                  ctx.lineTo(gx - 8, gy + 8);
                  ctx.stroke();
              }
-             
              ctx.globalAlpha = 1.0;
-        } else {
-             // INSPECT MODE (Hover existing)
-             // Check if mouse is near a tower
-             const hoveredTower = towersRef.current.find(t => distance(t.position, {x, y}) < 20);
-             if (hoveredTower) {
-                 ctx.beginPath();
-                 ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-                 ctx.lineWidth = 1;
-                 ctx.arc(hoveredTower.position.x, hoveredTower.position.y, hoveredTower.range, 0, Math.PI * 2);
-                 ctx.fill();
-                 ctx.stroke();
-             }
         }
     }
-
   }, [selectedTower]);
 
   // Loop Controller
@@ -465,7 +528,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     return () => cancelAnimationFrame(animationFrameId);
   }, [update, draw]);
 
-  // Coordinate Mapping Helper (Responsive Canvas)
+  // Canvas Coordinate Mapping
   const getCanvasCoordinates = (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
@@ -480,51 +543,35 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       };
   };
 
-  // Mouse Handlers
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY);
   };
+  const handleMouseLeave = () => { mousePosRef.current = null; };
 
-  const handleMouseLeave = () => {
-    mousePosRef.current = null;
-  };
-
-  // Touch Handlers for Mobile
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
       if (e.touches.length > 0) {
           const touch = e.touches[0];
           mousePosRef.current = getCanvasCoordinates(touch.clientX, touch.clientY);
       }
   };
+  const handleTouchEnd = () => { setTimeout(() => { mousePosRef.current = null; }, 100); };
 
-  const handleTouchEnd = () => {
-      // Don't clear immediately to allow the 'click' (tap) event to fire with the last position if needed,
-      // but usually we want to clear the ghost.
-      // For now, let's delay clearing or just keep it until click handles it.
-      setTimeout(() => { mousePosRef.current = null; }, 100);
-  };
-
-  // Click Handler (Building) - Works for both Mouse and Tap
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!selectedTower || gameStateRef.current.isGameOver) return;
     
-    // Recalculate or use current ref
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos) return;
     const { x, y } = pos;
     
-    // Snap to grid
     const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
     const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
 
-    // Validation
     const config = TOWER_TYPES[selectedTower];
     const canAfford = gameStateRef.current.money >= config.cost;
     const onPath = isPointOnPath(gx, gy, 25);
     const existing = towersRef.current.find(t => distance(t.position, { x: gx, y: gy }) < 20);
     
     if (canAfford && !onPath && !existing) {
-      // Build
       gameStateRef.current.money -= config.cost;
       towersRef.current.push({
         id: Math.random().toString(),
@@ -535,33 +582,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         cooldown: config.cooldown,
         lastShotFrame: 0
       });
+      triggerHaptic('light'); // Success haptic
       setUiState({ ...gameStateRef.current });
-      setSelectedTower(null); // Deselect after build
-    }
-  };
-
-  // Initial Setup
-  useEffect(() => {
-    // Auto-start wave 1 logic could go here or await user interaction
-    // startWave(1);
-    // gameStateRef.current.isPlaying = true;
-  }, []);
-
-  const handleStartWave = () => {
-    if (!gameStateRef.current.isPlaying) {
-        gameStateRef.current.isPlaying = true;
-        startWave(gameStateRef.current.wave);
+      setSelectedTower(null); 
     } else {
-        // Force next wave logic if needed, or just pause toggle
-        // gameStateRef.current.isPlaying = !gameStateRef.current.isPlaying;
+      triggerHaptic('error'); // Error haptic
     }
   };
 
   const handleConsultAI = async () => {
     setIsAdvisorLoading(true);
+    triggerHaptic('medium');
     const advice = await getTacticalAdvice(gameStateRef.current, towersRef.current);
     setAdvisorMessage(advice);
     setIsAdvisorLoading(false);
+    triggerHaptic('success');
   };
   
   const resetGame = () => {
@@ -573,6 +608,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       setSpawnQueue([]);
       setUiState({...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0});
       setAdvisorMessage("Systems reset. Awaiting command.");
+      triggerHaptic('medium');
+  };
+
+  const handleTowerSelect = (type: TowerType) => {
+    setSelectedTower(selectedTower === type ? null : type);
+    triggerHaptic('light');
   };
 
   return (
@@ -588,10 +629,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           onTouchMove={handleTouchMove}
-          onTouchStart={handleTouchMove} // Update position immediately on touch
+          onTouchStart={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          style={{ touchAction: 'none' }} // Prevents scrolling while playing
-          className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 cursor-crosshair max-w-full max-h-[60vh] lg:max-h-full object-contain"
+          style={{ touchAction: 'none' }}
+          className="bg-slate-950 rounded-xl shadow-2xl border border-slate-800 cursor-crosshair max-w-full max-h-[60vh] lg:max-h-full object-contain"
         />
         
         {/* Overlay for Game Over */}
@@ -609,16 +650,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         )}
       </div>
 
-      {/* Sidebar / HUD - Adjusted for Mobile */}
+      {/* Sidebar / HUD */}
       <div className="flex-1 flex flex-col gap-2 lg:gap-4 overflow-y-auto pb-4 lg:pb-0">
         
         {/* Stats Panel */}
         <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 flex flex-col gap-2 lg:gap-4">
             <div className="flex justify-between items-center">
-                <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                    NEON DEFENSE
-                </h1>
-                <div className="text-xs text-slate-500 font-mono hidden lg:block">v1.0-MOBILE</div>
+                <div className="flex flex-col">
+                  <h1 className="font-display text-lg lg:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+                      NEON DEFENSE
+                  </h1>
+                  {userName && <span className="text-xs text-blue-400 font-mono">Cmdr. {userName}</span>}
+                </div>
+                <div className="text-xs text-slate-500 font-mono hidden lg:block">v1.1-TG</div>
             </div>
             
             <div className="grid grid-cols-4 lg:grid-cols-2 gap-2 lg:gap-4">
@@ -660,14 +704,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             </div>
         </div>
 
-        {/* Build Menu - Horizontal Scroll on Mobile, Grid on Desktop */}
+        {/* Build Menu */}
         <div className="bg-slate-800 p-2 lg:p-4 rounded-xl border border-slate-700 flex-shrink-0">
             <h3 className="text-slate-400 text-xs lg:text-sm font-bold uppercase mb-2">Arsenal</h3>
             <div className="flex overflow-x-auto lg:grid lg:grid-cols-1 gap-2 pb-2 lg:pb-0 snap-x">
                 {Object.values(TOWER_TYPES).map(tower => (
                     <button
                         key={tower.type}
-                        onClick={() => setSelectedTower(selectedTower === tower.type ? null : tower.type)} // Toggle selection
+                        onClick={() => handleTowerSelect(tower.type)}
                         className={`min-w-[140px] lg:min-w-0 p-2 lg:p-3 rounded-lg border flex flex-col lg:flex-row items-center lg:items-center gap-2 lg:gap-4 transition hover:bg-slate-700/50 snap-center
                             ${selectedTower === tower.type 
                                 ? 'border-blue-500 bg-slate-700' 
@@ -675,7 +719,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                     >
                         <div 
                             className="w-8 h-8 lg:w-10 lg:h-10 rounded flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: tower.color }}
+                            style={{ backgroundColor: tower.color, boxShadow: `0 0 10px ${tower.color}` }}
                         >
                             <Zap size={16} className="text-white mix-blend-overlay" />
                         </div>
@@ -693,7 +737,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             </div>
         </div>
 
-        {/* AI Advisor Panel - Compact on Mobile */}
+        {/* AI Advisor Panel */}
         <div className="bg-slate-800 p-3 lg:p-4 rounded-xl border border-slate-700 relative overflow-hidden flex-1 lg:flex-none">
              <div className="absolute top-0 right-0 p-4 opacity-10 hidden lg:block">
                  <Bot size={64} />
