@@ -48,17 +48,118 @@ const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[
 };
 
 const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
-  // Simplified icons for UI
+  // Complex SVG icons matching the canvas drawTower logic
+  // ViewBox 0 0 40 40, Center 20 20
+  
+  const BasePlate = () => (
+    <>
+      <circle cx="20" cy="20" r="16" fill="#0f172a" stroke="#334155" strokeWidth="2" />
+      <circle cx="20" cy="20" r="10" fill="#1e293b" />
+    </>
+  );
+
   switch (type) {
-    case TowerType.BASIC: // Sentry
+    case TowerType.BASIC: // Sentry - Dual Barrel
       return (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="drop-shadow-md">
-          <circle cx="12" cy="12" r="8" stroke={color} strokeWidth="2" />
-          <circle cx="12" cy="12" r="3" fill={color} />
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          {/* Turret Body */}
+          <rect x="14" y="14" width="12" height="12" rx="6" fill="#475569" />
+          {/* Barrels */}
+          <rect x="16" y="6" width="3" height="10" fill="#94a3b8" />
+          <rect x="21" y="6" width="3" height="10" fill="#94a3b8" />
+          <circle cx="20" cy="20" r="4" fill={color} />
         </svg>
       );
+
+    case TowerType.RAPID: // Gatling
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          <rect x="12" y="14" width="16" height="14" rx="1" fill="#3f6212" />
+          <rect x="18" y="6" width="4" height="8" fill="#a3e635" />
+          <rect x="13" y="8" width="3" height="6" fill="#a3e635" />
+          <rect x="24" y="8" width="3" height="6" fill="#a3e635" />
+          <circle cx="14" cy="18" r="3" fill="#1e293b" />
+        </svg>
+      );
+
+    case TowerType.SNIPER: // Railgun
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          <rect x="17" y="4" width="6" height="32" fill="#7c2d12" />
+          {/* Coils */}
+          <rect x="16" y="10" width="8" height="2" fill={color} />
+          <rect x="16" y="18" width="8" height="2" fill={color} />
+          <rect x="16" y="26" width="8" height="2" fill={color} />
+          <circle cx="20" cy="30" r="5" fill="#0ea5e9" />
+        </svg>
+      );
+
+    case TowerType.AOE: // Howitzer
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          <path d="M10 12 L30 12 L30 28 L10 28 Z" fill="#7f1d1d" />
+          <rect x="14" y="6" width="12" height="10" fill="#1e293b" />
+          <rect x="18" y="4" width="4" height="4" fill="#000" />
+        </svg>
+      );
+
+    case TowerType.LASER: // Prism
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          {/* Claws */}
+          <path d="M12 10 L20 16 L12 22 Z" fill="#fff" />
+          <path d="M28 10 L20 16 L28 22 Z" fill="#fff" />
+          {/* Crystal */}
+          <path d="M20 8 L26 20 L20 32 L14 20 Z" fill={color} stroke="white" strokeWidth="0.5" />
+        </svg>
+      );
+
+    case TowerType.FROST: // Cryo
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          <circle cx="20" cy="20" r="10" fill="#e0f2fe" />
+          {/* Nozzles */}
+          <path d="M20 10 L23 6 L17 6 Z" fill="#0ea5e9" />
+          <path d="M29 25 L33 28 L28 30 Z" fill="#0ea5e9" />
+          <path d="M11 25 L7 28 L12 30 Z" fill="#0ea5e9" />
+          <circle cx="20" cy="20" r="4" fill="#fff" />
+        </svg>
+      );
+
+    case TowerType.SHOCK: // Tesla
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          <rect x="14" y="14" width="12" height="12" fill="#854d0e" />
+          <circle cx="20" cy="20" r="8" stroke={color} strokeWidth="2" strokeDasharray="2 2" />
+          <circle cx="20" cy="20" r="4" fill="#fff" className="animate-pulse" />
+        </svg>
+      );
+
+    case TowerType.MISSILE: // Swarm
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md">
+          <BasePlate />
+          <rect x="10" y="10" width="20" height="20" rx="4" fill="#581c87" />
+          <circle cx="15" cy="15" r="3" fill="#000" />
+          <circle cx="25" cy="15" r="3" fill="#000" />
+          <circle cx="15" cy="25" r="3" fill="#000" />
+          <circle cx="25" cy="25" r="3" fill="#000" />
+          <circle cx="15" cy="15" r="1.5" fill={color} />
+          <circle cx="25" cy="15" r="1.5" fill={color} />
+          <circle cx="15" cy="25" r="1.5" fill={color} />
+          <circle cx="25" cy="25" r="1.5" fill={color} />
+        </svg>
+      );
+      
     default:
-      return <div className="w-6 h-6 rounded-full border-2 shadow-[0_0_10px_currentColor]" style={{ borderColor: color, backgroundColor: color + '33', color: color }} />;
+      return <div className="w-10 h-10 rounded-full bg-gray-500" />;
   }
 };
 
@@ -520,48 +621,192 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.save();
     ctx.translate(tower.position.x, tower.position.y);
     
-    // Draw Base (Static) with Shadow
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = 'black';
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath(); ctx.arc(0,0, 16, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur = 0;
+    const color = TOWER_TYPES[tower.type].color;
 
-    // Technical ring
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(0,0, 14, 0, Math.PI*2); ctx.stroke();
-    
-    // Level Indicator (Chevrons on base)
-    ctx.fillStyle = '#fbbf24'; // Gold
-    for(let i=0; i<tower.level; i++) {
-        ctx.beginPath();
-        ctx.arc(10, 10 - (i*5), 1.5, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // Rotate Context for Turret
-    ctx.rotate(tower.rotation);
-
-    // Draw Turret Head (Rotates)
-    ctx.fillStyle = TOWER_TYPES[tower.type].color;
-    
-    // Add glow to turret
-    ctx.shadowBlur = 5;
-    ctx.shadowColor = TOWER_TYPES[tower.type].color;
-
-    // Simple shapes for better performance but kept stylization
+    // --- 1. BASE PLATFORM (Technical octagon) ---
+    ctx.fillStyle = '#0f172a'; // Deep slate base
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
     ctx.beginPath();
-    if (tower.type === TowerType.SNIPER) {
-        ctx.fillRect(-4, -15, 8, 30);
-    } else if (tower.type === TowerType.MISSILE) {
-        ctx.fillRect(-10, -10, 20, 20);
-    } else {
-        ctx.arc(0, 0, 8, 0, Math.PI*2);
+    for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI) / 4;
+        const r = 18;
+        ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
     }
+    ctx.closePath();
     ctx.fill();
     ctx.shadowBlur = 0;
+    
+    // Base detailing (Rim)
+    ctx.strokeStyle = '#334155'; // Slate 700
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
+    // Inner mechanical circle
+    ctx.fillStyle = '#1e293b'; // Slate 800
+    ctx.beginPath(); ctx.arc(0,0, 12, 0, Math.PI*2); ctx.fill();
+
+    // --- 2. TURRET ROTATION ---
+    ctx.rotate(tower.rotation);
+
+    // Common shadow for turret head
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+
+    switch(tower.type) {
+        case TowerType.BASIC: // Sentry - Dual Barrel
+            // Turret body
+            ctx.fillStyle = '#475569';
+            ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+            // Barrels
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(4, -4, 16, 3); // Right barrel
+            ctx.fillRect(4, 1, 16, 3);  // Left barrel
+            // Center detail
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+            break;
+
+        case TowerType.RAPID: // Gatling - Tri-Barrel
+            // Rectangular body
+            ctx.fillStyle = '#3f6212'; // Dark Green
+            ctx.fillRect(-10, -8, 16, 16);
+            // Barrels
+            ctx.fillStyle = '#a3e635'; // Lime tip
+            ctx.fillRect(6, -6, 14, 2);
+            ctx.fillRect(6, -1, 14, 2);
+            ctx.fillRect(6, 4, 14, 2);
+            // Ammo drum on side
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(-4, -8, 5, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case TowerType.SNIPER: // Railgun - Long & Sleek
+            // Long barrel
+            ctx.fillStyle = '#7c2d12'; // Dark Orange base
+            ctx.fillRect(-8, -3, 36, 6);
+            // Magnetic Coils
+            ctx.fillStyle = color; 
+            ctx.fillRect(5, -5, 4, 10);
+            ctx.fillRect(15, -5, 4, 10);
+            ctx.fillRect(25, -5, 4, 10);
+            // Scope
+            ctx.fillStyle = '#0ea5e9'; // Cyan scope lens
+            ctx.beginPath(); ctx.arc(-2, -6, 3, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case TowerType.AOE: // Howitzer - Heavy
+            // Heavy Shield/Mount
+            ctx.fillStyle = '#7f1d1d'; // Dark Red
+            ctx.beginPath();
+            ctx.moveTo(-10, -12); ctx.lineTo(10, -12); ctx.lineTo(10, 12); ctx.lineTo(-10, 12);
+            ctx.fill();
+            // Short fat barrel
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, -6, 18, 12);
+            // Muzzle break
+            ctx.fillStyle = '#000';
+            ctx.fillRect(18, -7, 4, 14);
+            break;
+
+        case TowerType.LASER: // Prism - Crystal
+            // Holding claws
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(10, -5); ctx.lineTo(0,0); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(10, 5); ctx.lineTo(0,0); ctx.fill();
+            // Crystal Core
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.moveTo(-5, 0); ctx.lineTo(5, -5); ctx.lineTo(15, 0); ctx.lineTo(5, 5);
+            ctx.fill();
+            // Beam guide line
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(24, 0); ctx.stroke();
+            break;
+            
+        case TowerType.FROST: // Cryo - Tank & Nozzles
+            // Center Tank
+            ctx.fillStyle = '#e0f2fe';
+            ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill();
+            // Nozzles (Tri-shape)
+            ctx.fillStyle = '#0ea5e9';
+            for(let j=0; j<3; j++) {
+                ctx.rotate(Math.PI * 2 / 3);
+                ctx.fillRect(8, -2, 6, 4);
+            }
+            // Frost particle center
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+            break;
+
+        case TowerType.SHOCK: // Tesla - Coil
+            // Base plate
+            ctx.fillStyle = '#854d0e'; // Bronze
+            ctx.fillRect(-8, -8, 16, 16);
+            // Coil windings
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for(let k=0; k<4; k++) {
+                ctx.arc(0, 0, 4 + k*2, 0, Math.PI*2);
+            }
+            ctx.stroke();
+            // Center electrode
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#facc15';
+            ctx.shadowBlur = 10;
+            ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case TowerType.MISSILE: // Swarm - Pods
+            // Pod Box
+            ctx.fillStyle = '#581c87'; // Dark Purple
+            ctx.fillRect(-12, -12, 24, 24);
+            // Missile Tubes (2x2)
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(-5, -5, 3, 0, Math.PI*2);
+            ctx.arc(5, -5, 3, 0, Math.PI*2);
+            ctx.arc(-5, 5, 3, 0, Math.PI*2);
+            ctx.arc(5, 5, 3, 0, Math.PI*2);
+            ctx.fill();
+            // Loaded missiles (tips)
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(-5, -5, 1.5, 0, Math.PI*2);
+            ctx.arc(5, -5, 1.5, 0, Math.PI*2);
+            ctx.arc(-5, 5, 1.5, 0, Math.PI*2);
+            ctx.arc(5, 5, 1.5, 0, Math.PI*2);
+            ctx.fill();
+            break;
+    }
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    
+    // --- 3. LEVEL INDICATORS (Overlay) ---
+    // Draw these AFTER restore so they don't rotate with turret (stay fixed relative to base)
+    // Or maybe they should rotate? Let's keep them on the base (non-rotating) for readability.
+    // Actually, drawing them on the base earlier is better, but let's overlay them now on top of everything
+    // but positioned relative to tower center
+    
+    ctx.save();
+    ctx.translate(tower.position.x, tower.position.y);
+    // Draw level dots on the back side
+    ctx.fillStyle = '#fbbf24'; // Gold
+    ctx.shadowColor = '#fbbf24';
+    ctx.shadowBlur = 4;
+    
+    // Position dots in a row below/behind the tower
+    const startX = -((tower.level - 1) * 4);
+    for(let i=0; i<tower.level; i++) {
+        ctx.beginPath();
+        ctx.arc(startX + (i*8), 16, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
     ctx.restore();
   };
 
