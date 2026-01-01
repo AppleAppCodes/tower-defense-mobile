@@ -160,6 +160,24 @@ class AudioService {
     osc.start(now);
     osc.stop(now + 1.5);
   }
+
+  playTick() {
+    if (!this.enabled || !this.ctx) return;
+    this.resume();
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    const now = this.ctx.currentTime;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1000, now);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
 }
 
 export const audioService = new AudioService();

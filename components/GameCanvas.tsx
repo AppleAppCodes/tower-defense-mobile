@@ -165,6 +165,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const mousePosRef = useRef<Vector2D | null>(null);
   const isPointerDownRef = useRef<boolean>(false);
   
+  // Timing Refs for Fixed Timestep
+  const lastFrameTimeRef = useRef<number>(0);
+  const accumulatorRef = useRef<number>(0);
+
   // Theme State
   const [unlockedThemes, setUnlockedThemes] = useState<string[]>(['default']);
   const [activeThemeId, setActiveThemeId] = useState<string>('default');
@@ -439,10 +443,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const initializeGame = useCallback(() => {
       setHasStartedGame(true);
-      // Start with 5 seconds (300 frames) countdown for the first wave
-      gameStateRef.current.autoStartTimer = 300;
+      // Start with 10 seconds (600 frames) countdown for the first wave
+      gameStateRef.current.autoStartTimer = 600;
       gameStateRef.current.isPlaying = false; 
-      setUiState(prev => ({ ...prev, autoStartTimer: 300 }));
+      setUiState(prev => ({ ...prev, autoStartTimer: 600 }));
       triggerHaptic('medium');
   }, []);
 
@@ -576,6 +580,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         // --- GAME LOGIC (Wait State) ---
         if (!state.isPlaying) {
              if (state.autoStartTimer > 0) {
+                // Play tick sound for last 3 seconds (180, 120, 60 frames approx)
+                if (state.autoStartTimer === 180 || state.autoStartTimer === 120 || state.autoStartTimer === 60) {
+                    audioService.playTick();
+                }
+
                 state.autoStartTimer--;
                 if (state.autoStartTimer === 0) handleStartWave();
                 if (state.autoStartTimer % 60 === 0 && loop === 0) setUiState({ ...state });
@@ -738,558 +747,281 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     }
   }, [onGameOver, handleStartWave, currentMap, activePerks]); // Removed spawnQueue from dependencies
 
-  const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower) => {
-    ctx.save();
-    ctx.translate(tower.position.x, tower.position.y);
-    
-    // VISUAL PERK INDICATOR ON TOWER
-    const hasDmgBuff = activePerks.some(p => p.type === PerkType.DAMAGE);
-    const hasSpeedBuff = activePerks.some(p => p.type === PerkType.SPEED);
-    
-    // Aura under tower if buffed
-    if (hasDmgBuff || hasSpeedBuff) {
-        ctx.save();
-        ctx.globalAlpha = 0.3 + Math.sin(gameStateRef.current.gameTime * 0.2) * 0.1;
-        ctx.fillStyle = hasDmgBuff ? '#ef4444' : '#eab308';
-        ctx.beginPath();
-        ctx.arc(0, 0, 25, 0, Math.PI*2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    const color = TOWER_TYPES[tower.type].color;
-
-    // --- 1. BASE PLATFORM (Technical octagon) ---
-    ctx.fillStyle = '#0f172a'; // Deep slate base
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-        const angle = (i * Math.PI) / 4;
-        const r = 18;
-        ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    
-    // Base detailing (Rim)
-    ctx.strokeStyle = '#334155'; // Slate 700
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Inner mechanical circle
-    ctx.fillStyle = '#1e293b'; // Slate 800
-    ctx.beginPath(); ctx.arc(0,0, 12, 0, Math.PI*2); ctx.fill();
-
-    // --- 2. TURRET ROTATION ---
-    ctx.rotate(tower.rotation);
-
-    // Common shadow for turret head
-    ctx.shadowBlur = 6;
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-
-    switch(tower.type) {
-        case TowerType.BASIC: // Sentry - Dual Barrel
-            // Turret body
-            ctx.fillStyle = '#475569';
-            ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
-            // Barrels
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillRect(4, -4, 16, 3); // Right barrel
-            ctx.fillRect(4, 1, 16, 3);  // Left barrel
-            // Center detail
-            ctx.fillStyle = color;
-            ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
-            break;
-
-        case TowerType.RAPID: // Gatling - Tri-Barrel
-            // Rectangular body
-            ctx.fillStyle = '#3f6212'; // Dark Green
-            ctx.fillRect(-10, -8, 16, 16);
-            // Barrels
-            ctx.fillStyle = '#a3e635'; // Lime tip
-            ctx.fillRect(6, -6, 14, 2);
-            ctx.fillRect(6, -1, 14, 2);
-            ctx.fillRect(6, 4, 14, 2);
-            // Ammo drum on side
-            ctx.fillStyle = '#1e293b';
-            ctx.beginPath(); ctx.arc(-4, -8, 5, 0, Math.PI*2); ctx.fill();
-            break;
-
-        case TowerType.SNIPER: // Railgun - Long & Sleek
-            // Long barrel
-            ctx.fillStyle = '#7c2d12'; // Dark Orange base
-            ctx.fillRect(-8, -3, 36, 6);
-            // Magnetic Coils
-            ctx.fillStyle = color; 
-            ctx.fillRect(5, -5, 4, 10);
-            ctx.fillRect(15, -5, 4, 10);
-            ctx.fillRect(25, -5, 4, 10);
-            // Scope
-            ctx.fillStyle = '#0ea5e9'; // Cyan scope lens
-            ctx.beginPath(); ctx.arc(-2, -6, 3, 0, Math.PI*2); ctx.fill();
-            break;
-
-        case TowerType.AOE: // Howitzer - Heavy
-            // Heavy Shield/Mount
-            ctx.fillStyle = '#7f1d1d'; // Dark Red
-            ctx.beginPath();
-            ctx.moveTo(-10, -12); ctx.lineTo(10, -12); ctx.lineTo(10, 12); ctx.lineTo(-10, 12);
-            ctx.fill();
-            // Short fat barrel
-            ctx.fillStyle = '#1e293b';
-            ctx.fillRect(0, -6, 18, 12);
-            // Muzzle break
-            ctx.fillStyle = '#000';
-            ctx.fillRect(18, -7, 4, 14);
-            break;
-
-        case TowerType.LASER: // Prism - Crystal
-            // Holding claws
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(10, -5); ctx.lineTo(0,0); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(10, 5); ctx.lineTo(0,0); ctx.fill();
-            // Crystal Core
-            ctx.fillStyle = color;
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.moveTo(-5, 0); ctx.lineTo(5, -5); ctx.lineTo(15, 0); ctx.lineTo(5, 5);
-            ctx.fill();
-            // Beam guide line
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(24, 0); ctx.stroke();
-            break;
-            
-        case TowerType.FROST: // Cryo - Tank & Nozzles
-            // Center Tank
-            ctx.fillStyle = '#e0f2fe';
-            ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill();
-            // Nozzles (Tri-shape)
-            ctx.fillStyle = '#0ea5e9';
-            for(let j=0; j<3; j++) {
-                ctx.rotate(Math.PI * 2 / 3);
-                ctx.fillRect(8, -2, 6, 4);
-            }
-            // Frost particle center
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
-            break;
-
-        case TowerType.SHOCK: // Tesla - Coil
-            // Base plate
-            ctx.fillStyle = '#854d0e'; // Bronze
-            ctx.fillRect(-8, -8, 16, 16);
-            // Coil windings
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            for(let k=0; k<4; k++) {
-                ctx.arc(0, 0, 4 + k*2, 0, Math.PI*2);
-            }
-            ctx.stroke();
-            // Center electrode
-            ctx.fillStyle = '#fff';
-            ctx.shadowColor = '#facc15';
-            ctx.shadowBlur = 10;
-            ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
-            break;
-
-        case TowerType.MISSILE: // Swarm - Pods
-            // Pod Box
-            ctx.fillStyle = '#581c87'; // Dark Purple
-            ctx.fillRect(-12, -12, 24, 24);
-            // Missile Tubes (2x2)
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.arc(-5, -5, 3, 0, Math.PI*2);
-            ctx.arc(5, -5, 3, 0, Math.PI*2);
-            ctx.arc(-5, 5, 3, 0, Math.PI*2);
-            ctx.arc(5, 5, 3, 0, Math.PI*2);
-            ctx.fill();
-            // Loaded missiles (tips)
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(-5, -5, 1.5, 0, Math.PI*2);
-            ctx.arc(5, -5, 1.5, 0, Math.PI*2);
-            ctx.arc(-5, 5, 1.5, 0, Math.PI*2);
-            ctx.arc(5, 5, 1.5, 0, Math.PI*2);
-            ctx.fill();
-            break;
-    }
-
-    ctx.shadowBlur = 0;
-    ctx.restore();
-    
-    // --- 3. LEVEL INDICATORS (Overlay) ---
-    ctx.save();
-    ctx.translate(tower.position.x, tower.position.y);
-    // Draw level dots on the back side
-    ctx.fillStyle = '#fbbf24'; // Gold
-    ctx.shadowColor = '#fbbf24';
-    ctx.shadowBlur = 4;
-    const startX = -((tower.level - 1) * 4);
-    for(let i=0; i<tower.level; i++) {
-        ctx.beginPath();
-        ctx.arc(startX + (i*8), 16, 2, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.restore();
-  };
-
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Get current theme based on state
+    // Theme Config
     const theme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
 
-    // 1. Background
-    ctx.fillStyle = theme.background; 
+    // 1. Clear & Background
+    ctx.fillStyle = theme.background;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Animated Starfield
+    // 2. Draw Starfield
+    ctx.fillStyle = "#ffffff";
     terrainRef.current.stars.forEach(star => {
-        const flicker = Math.random() * 0.2 + 0.8;
-        ctx.globalAlpha = star.alpha * flicker;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(star.x, star.y, star.size, 0, Math.PI*2); ctx.fill();
-        star.y += star.speed;
-        if (star.y > CANVAS_HEIGHT) star.y = 0;
+        ctx.globalAlpha = Math.abs(Math.sin(gameStateRef.current.gameTime * star.speed * 0.05 + star.x));
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
     });
     ctx.globalAlpha = 1.0;
 
-    // Tactical Grid
+    // 3. Draw Grid
     ctx.strokeStyle = theme.grid;
     ctx.lineWidth = 1;
+    ctx.beginPath();
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_HEIGHT); ctx.stroke();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_HEIGHT);
     }
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_WIDTH, y); ctx.stroke();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_WIDTH, y);
     }
-
-    // 2. Scanline Effect
-    const scanY = terrainRef.current.scanline;
-    const grad = ctx.createLinearGradient(0, scanY, 0, scanY + 40);
-    grad.addColorStop(0, theme.scanline.replace(/[\d.]+\)$/g, '0.0)'));
-    grad.addColorStop(0.5, theme.scanline);
-    grad.addColorStop(1, theme.scanline.replace(/[\d.]+\)$/g, '0.0)'));
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, scanY, CANVAS_WIDTH, 40);
-
-    // 3. Path with Glow
-    ctx.save();
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = theme.pathGlow;
-    ctx.strokeStyle = theme.pathOuter; 
-    ctx.lineWidth = 44; 
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(currentMap.waypoints[0].x, currentMap.waypoints[0].y);
-    for (let i = 1; i < currentMap.waypoints.length; i++) ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
-    // Inner path track
-    ctx.strokeStyle = theme.pathInner;
-    ctx.lineWidth = 36;
-    ctx.stroke();
-    
-    // Dashed guide
-    ctx.strokeStyle = theme.pathGlow;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 20]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    // 4. Perk Drops (Render BEFORE towers/enemies so they look "on the ground")
-    perkDropsRef.current.forEach(perk => {
-        ctx.save();
-        ctx.translate(perk.position.x, perk.position.y);
-        
-        // Bobbing animation
-        const bob = Math.sin(gameStateRef.current.gameTime * 0.1) * 3;
-        ctx.translate(0, bob);
-        
-        const info = PERK_STATS[perk.type];
-        const pulse = 1 + Math.sin(gameStateRef.current.gameTime * 0.2) * 0.2;
-        
-        // Glow
-        ctx.shadowColor = info.color;
+    // 4. Draw Path
+    if (currentMap.waypoints.length > 0) {
         ctx.shadowBlur = 15;
-        
-        // Background Circle
-        ctx.fillStyle = info.color;
-        ctx.beginPath(); ctx.arc(0, 0, 16 * pulse, 0, Math.PI*2); ctx.fill();
-        ctx.shadowBlur = 0;
-        
-        // Icon
-        ctx.font = "16px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(info.icon, 0, 1);
-        
-        // Disappearing Timer Ring
-        const lifePct = perk.life / perk.maxLife;
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
+        ctx.shadowColor = theme.pathGlow;
+        ctx.strokeStyle = theme.pathOuter;
+        ctx.lineWidth = 40;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.arc(0, 0, 20, -Math.PI/2, (-Math.PI/2) + (Math.PI*2 * lifePct));
+        ctx.moveTo(currentMap.waypoints[0].x, currentMap.waypoints[0].y);
+        for (let i = 1; i < currentMap.waypoints.length; i++) {
+            ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
+        }
         ctx.stroke();
         
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = theme.pathInner;
+        ctx.lineWidth = 32;
+        ctx.stroke();
+
+        ctx.strokeStyle = theme.uiAccent;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 10]);
+        ctx.globalAlpha = 0.3;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1.0;
+    }
+
+    // 5. Draw Perk Drops
+    perkDropsRef.current.forEach(perk => {
+        const info = PERK_STATS[perk.type];
+        const pulse = 1 + Math.sin(gameStateRef.current.gameTime * 0.1) * 0.2;
+        
+        ctx.save();
+        ctx.translate(perk.position.x, perk.position.y);
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = info.color;
+        ctx.fillStyle = info.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, 12 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 0;
+        ctx.fillText(info.icon, 0, 0);
         ctx.restore();
     });
 
-    // 5. Towers
+    // 6. Draw Towers
     towersRef.current.forEach(tower => {
-        drawTower(ctx, tower);
-        // Draw selection ring
+        const config = TOWER_TYPES[tower.type];
+        ctx.save();
+        ctx.translate(tower.position.x, tower.position.y);
+        
+        // Base
+        ctx.fillStyle = '#1e293b'; 
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.rotate(tower.rotation);
+        ctx.fillStyle = config.color;
+        // Simple shape representation
+        ctx.fillRect(-6, -6, 12, 12); // Generic body
+        // Barrel
+        ctx.fillRect(0, -4, 20, 8);
+        
+        ctx.restore();
+
+        // Level dots
+        ctx.fillStyle = '#fbbf24';
+        for(let i=0; i<tower.level; i++) {
+             ctx.beginPath();
+             ctx.arc(-8 + (i * 8), -12, 2, 0, Math.PI * 2);
+             ctx.fill();
+        }
+
+        // Selection ring
         if (selectedPlacedTowerId === tower.id) {
             ctx.beginPath();
-            ctx.strokeStyle = '#fbbf24';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.arc(tower.position.x, tower.position.y, 24, 0, Math.PI * 2);
+            ctx.strokeStyle = '#fff';
+            ctx.setLineDash([4, 4]);
+            ctx.arc(0, 0, tower.range, 0, Math.PI * 2);
             ctx.stroke();
             ctx.setLineDash([]);
-            // Pulse range
-            const pulse = 1 + Math.sin(Date.now() / 200) * 0.05;
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
-            ctx.lineWidth = 1;
-            ctx.fillStyle = 'rgba(251, 191, 36, 0.1)';
-            ctx.arc(tower.position.x, tower.position.y, tower.range * pulse, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.arc(0, 0, 20, 0, Math.PI * 2);
             ctx.stroke();
         }
+        ctx.restore();
     });
 
-    // 6. Enemies (NEW COMPLEX RENDERER)
+    // 7. Draw Enemies
     enemiesRef.current.forEach(enemy => {
-        const target = currentMap.waypoints[enemy.pathIndex + 1];
-        let angle = 0;
-        if (target) {
-            angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
-        }
-
         ctx.save();
         ctx.translate(enemy.position.x, enemy.position.y);
-        ctx.rotate(angle);
-
-        // Enemy Glow
-        ctx.shadowBlur = 10;
         ctx.shadowColor = enemy.color;
-        
+        ctx.shadowBlur = 10;
         ctx.fillStyle = enemy.color;
-        
-        // --- COMPLEX DRAWING LOGIC ---
-        if (enemy.type === EnemyType.BOSS) {
-            // "THE LEVIATHAN" - Rotating Dreadnought
-            const spin = gameStateRef.current.gameTime * 0.05;
-            
-            // Outer Shield Ring
-            ctx.save();
-            ctx.rotate(spin);
-            ctx.strokeStyle = enemy.color;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            for(let k=0; k<6; k++) {
-                const a = (k * Math.PI * 2) / 6;
-                ctx.moveTo(Math.cos(a)*28, Math.sin(a)*28);
-                ctx.lineTo(Math.cos(a)*34, Math.sin(a)*34);
-            }
-            ctx.stroke();
-            ctx.beginPath(); ctx.arc(0,0, 28, 0, Math.PI*2); ctx.stroke();
-            ctx.restore();
-
-            // Inner Core
-            ctx.fillStyle = '#0f172a'; // Dark center
-            ctx.beginPath(); ctx.arc(0,0, 20, 0, Math.PI*2); ctx.fill();
-            
-            // Pulsing Reactor
-            ctx.fillStyle = enemy.color;
-            const pulse = 15 + Math.sin(gameStateRef.current.gameTime * 0.2) * 5;
-            ctx.beginPath(); 
-            // Skull shape-ish
-            ctx.moveTo(-10, -10); ctx.lineTo(10, -10); ctx.lineTo(8, 10); ctx.lineTo(-8, 10);
-            ctx.fill();
-            ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fillStyle="#fff"; ctx.fill();
-
-        } else if (enemy.type === EnemyType.TANK) {
-            // "THE BEHEMOTH" - Heavy Armor Square
-            ctx.fillStyle = '#334155'; // Dark Slate Base
-            ctx.fillRect(-16, -16, 32, 32);
-            ctx.fillStyle = enemy.color;
-            // Armor Plates
-            ctx.fillRect(-14, -14, 10, 28); // Left track
-            ctx.fillRect(4, -14, 10, 28); // Right track
-            // Turret
-            ctx.fillStyle = '#0f172a';
-            ctx.beginPath(); ctx.arc(0,0, 8, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = enemy.color;
-            ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 0); ctx.stroke();
-
-        } else if (enemy.type === EnemyType.FAST) {
-            // "THE VIPER" - Fast Jet
-            ctx.beginPath();
-            ctx.moveTo(14, 0); // Nose
-            ctx.lineTo(-10, -10); // Left Wing
-            ctx.lineTo(-4, 0); // Center back
-            ctx.lineTo(-10, 10); // Right Wing
-            ctx.closePath();
-            ctx.fill();
-            // Engine Glow
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(-6, 0, 2, 0, Math.PI*2); ctx.fill();
-
-        } else {
-            // "THE SCARAB" - Normal Unit
-            ctx.beginPath();
-            ctx.moveTo(10, 0);
-            ctx.lineTo(-6, -8);
-            ctx.lineTo(-2, 0);
-            ctx.lineTo(-6, 8);
-            ctx.closePath();
-            ctx.fill();
-            // Eye
-            ctx.fillStyle = '#1e293b';
-            ctx.beginPath(); ctx.arc(2, 0, 3, 0, Math.PI*2); ctx.fill();
-        }
-
+        ctx.beginPath();
+        ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
+        ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.restore();
-
-        // --- HEALTH BARS ---
-        const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
         
-        // Boss HP Bar is bigger and has text
-        if (enemy.type === EnemyType.BOSS) {
-            ctx.save();
-            ctx.translate(enemy.position.x, enemy.position.y - 45);
-            // Bar Background
-            ctx.fillStyle = 'rgba(0,0,0,0.8)';
-            ctx.fillRect(-30, 0, 60, 6);
-            // Bar Fill
-            ctx.fillStyle = '#ef4444';
-            ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 5;
-            ctx.fillRect(-29, 1, 58 * hpPct, 4);
-            // Skull Icon
-            ctx.font = "10px sans-serif";
-            ctx.fillStyle = "#fff";
-            ctx.textAlign = "center";
-            ctx.shadowBlur = 0;
-            ctx.fillText("☠ BOSS", 0, -5);
-            ctx.restore();
-        } else if (hpPct < 1) {
-            // Normal HP Bar
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(enemy.position.x - 10, enemy.position.y - 20, 20, 3);
-            ctx.fillStyle = hpPct > 0.5 ? '#4ade80' : '#f87171';
-            ctx.fillRect(enemy.position.x - 10, enemy.position.y - 20, 20 * hpPct, 3);
-        }
-        
-        // Frozen indicator
         if (enemy.frozen > 0) {
-            ctx.strokeStyle = '#67e8f9';
-            ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(enemy.position.x, enemy.position.y, enemy.radius + 4, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = 'rgba(6, 182, 212, 0.6)';
+            ctx.fill();
+            ctx.strokeStyle = '#cffafe';
+            ctx.lineWidth = 1;
+            ctx.stroke();
         }
+
+        const hpPct = enemy.hp / enemy.maxHp;
+        if (hpPct < 1.0) {
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(-10, -enemy.radius - 8, 20, 4);
+            ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.2 ? '#eab308' : '#ef4444';
+            ctx.fillRect(-10, -enemy.radius - 8, 20 * hpPct, 4);
+        }
+        ctx.restore();
     });
 
-    // 7. Projectiles (Lasers/Tracers)
-    projectilesRef.current.forEach(p => {
-      ctx.save();
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = p.color;
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = p.type === 'AOE' ? 4 : 2;
-      
-      // Draw tail
-      const tailLen = p.speed * 1.5;
-      const angle = Math.atan2(p.velocity.y, p.velocity.x);
-      
-      ctx.beginPath();
-      ctx.moveTo(p.position.x, p.position.y);
-      ctx.lineTo(p.position.x - Math.cos(angle) * tailLen, p.position.y - Math.sin(angle) * tailLen);
-      ctx.stroke();
-
-      // Head
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(p.position.x, p.position.y, p.type==='AOE'?3:1.5, 0, Math.PI*2); ctx.fill();
-      
-      ctx.restore();
+    // 8. Draw Projectiles
+    projectilesRef.current.forEach(proj => {
+        ctx.save();
+        ctx.translate(proj.position.x, proj.position.y);
+        ctx.fillStyle = proj.color;
+        ctx.shadowColor = proj.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(0, 0, proj.radius + 1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     });
 
-    // 8. Particles
+    // 9. Draw Particles
     particlesRef.current.forEach(p => {
-      ctx.globalAlpha = p.life;
-      
-      if (p.type === 'ring') {
-          // Shockwave effect
-          ctx.strokeStyle = p.color;
-          ctx.lineWidth = 2 * p.life;
-          ctx.beginPath();
-          ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2);
-          ctx.stroke();
-      } else {
-          // Standard particle
-          ctx.fillStyle = p.color;
-          ctx.beginPath(); ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2); ctx.fill();
-      }
+        ctx.save();
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        if (p.type === 'ring') {
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
     });
 
-    // 9. Floating Text
-    ctx.font = "bold 14px Orbitron";
-    ctx.textAlign = "center";
+    // 10. Floating Text
     floatingTextsRef.current.forEach(ft => {
+        ctx.save();
         ctx.globalAlpha = ft.life;
         ctx.fillStyle = ft.color;
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 2;
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
         ctx.fillText(ft.text, ft.position.x, ft.position.y);
-        ctx.shadowBlur = 0;
+        ctx.restore();
     });
 
-    ctx.globalAlpha = 1.0;
+    // 11. Scanline
+    ctx.fillStyle = theme.scanline;
+    ctx.fillRect(0, terrainRef.current.scanline, CANVAS_WIDTH, 4);
+    
+    // Vignette
+    const grad = ctx.createRadialGradient(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT/2, CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // 10. Preview
+    // 12. Preview
     if (mousePosRef.current && selectedTowerType) {
-        const { x, y } = mousePosRef.current;
-        const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-        const gy = Math.floor(y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+        const gx = Math.floor(mousePosRef.current.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+        const gy = Math.floor(mousePosRef.current.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const config = TOWER_TYPES[selectedTowerType];
-        const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 25, currentMap.waypoints);
         
         ctx.beginPath();
-        ctx.fillStyle = isValid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(239, 68, 68, 0.2)';
-        ctx.strokeStyle = isValid ? 'rgba(59, 130, 246, 0.8)' : 'rgba(239, 68, 68, 0.8)';
-        ctx.lineWidth = 1;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.setLineDash([4, 4]);
         ctx.arc(gx, gy, config.range, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Using Math.hypot inline instead of distance function to avoid dependency issues or unnecessary complexity
+        const isValid = gameStateRef.current.money >= config.cost 
+                    && !isPointOnPath(gx, gy, 25, currentMap.waypoints) 
+                    && !towersRef.current.some(t => Math.hypot(t.position.x - gx, t.position.y - gy) < 20);
         
-        // Scan radius effect
-        if (isValid) {
-            ctx.beginPath();
-            ctx.moveTo(gx - 10, gy); ctx.lineTo(gx + 10, gy);
-            ctx.moveTo(gx, gy - 10); ctx.lineTo(gx, gy + 10);
-            ctx.stroke();
-        }
+        ctx.fillStyle = isValid ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+        ctx.beginPath();
+        ctx.arc(gx, gy, 16, 0, Math.PI * 2);
+        ctx.fill();
     }
-  }, [selectedTowerType, selectedPlacedTowerId, currentMap, activeThemeId, activePerks]); // Add activeThemeId, activePerks dependency
+  }, [activeThemeId, currentMap, selectedPlacedTowerId, selectedTowerType]);
 
   useEffect(() => {
     let animationFrameId: number;
-    const loop = () => { update(); draw(); animationFrameId = requestAnimationFrame(loop); };
-    loop();
+    const loop = (timestamp: number) => {
+        if (!lastFrameTimeRef.current) lastFrameTimeRef.current = timestamp;
+        const deltaTime = timestamp - lastFrameTimeRef.current;
+        lastFrameTimeRef.current = timestamp;
+
+        accumulatorRef.current += deltaTime;
+
+        // Safety cap to prevent spiral of death
+        if (accumulatorRef.current > 250) accumulatorRef.current = 250; 
+
+        // Run Logic at Fixed Time Step (60 FPS)
+        const FIXED_TIME_STEP = 1000 / 60; // ~16.666ms
+        
+        while (accumulatorRef.current >= FIXED_TIME_STEP) {
+            update(); // Execute one simulation tick
+            accumulatorRef.current -= FIXED_TIME_STEP;
+        }
+
+        draw();
+        animationFrameId = requestAnimationFrame(loop);
+    };
+    
+    animationFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationFrameId);
   }, [update, draw]);
 
