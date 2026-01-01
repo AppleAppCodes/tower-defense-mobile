@@ -1,4 +1,5 @@
 
+
 // Simple audio synthesizer to avoid loading external assets
 class AudioService {
   private ctx: AudioContext | null = null;
@@ -128,13 +129,14 @@ class AudioService {
   playBuild() {
     if (!this.enabled || !this.ctx) return;
     this.resume();
+    const now = this.ctx.currentTime;
+    
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     
     // Anvil / Hammer sound
-    const now = this.ctx.currentTime;
     osc.type = 'square';
     osc.frequency.setValueAtTime(440, now); // A4
     gain.gain.setValueAtTime(0.1, now);
@@ -179,34 +181,7 @@ class AudioService {
     this.resume();
     const now = this.ctx.currentTime;
 
-    // --- ERA 0: TRIBAL DRUMS (Bongo/Tom) ---
-    if (era === 0) {
-        const drumTimes = [0, 0.15, 0.3, 0.6]; // Rhythm: Bum-bum-BUM... BUM!
-        const drumFreqs = [180, 200, 160, 120];
-
-        drumTimes.forEach((t, i) => {
-            if (!this.ctx) return;
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            
-            osc.connect(gain);
-            gain.connect(this.ctx.destination);
-            
-            // Pitch Drop for Drum Effect
-            const startTime = now + t;
-            osc.frequency.setValueAtTime(drumFreqs[i], startTime);
-            osc.frequency.exponentialRampToValueAtTime(50, startTime + 0.1);
-            
-            gain.gain.setValueAtTime(0.5, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
-            
-            osc.start(startTime);
-            osc.stop(startTime + 0.2);
-        });
-        return;
-    }
-
-    // --- LATER ERAS: WAR HORN ---
+    // ALWAYS PLAY WAR HORN (Requested Revert)
     const masterGain = this.ctx.createGain();
     masterGain.connect(this.ctx.destination);
     masterGain.gain.setValueAtTime(0.4, now);

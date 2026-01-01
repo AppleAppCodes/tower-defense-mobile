@@ -47,6 +47,30 @@ const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[
   return false;
 };
 
+// --- GRAPHIC HELPERS ---
+
+// Create a reusable noise pattern for the ground to avoid flat colors
+const createNoisePattern = (ctx: CanvasRenderingContext2D, color: string) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const pCtx = canvas.getContext('2d');
+    if (!pCtx) return null;
+
+    // Fill background
+    pCtx.fillStyle = color;
+    pCtx.fillRect(0, 0, 100, 100);
+
+    // Add noise
+    for (let i = 0; i < 400; i++) {
+        pCtx.fillStyle = `rgba(0,0,0,${Math.random() * 0.05})`;
+        pCtx.fillRect(Math.random() * 100, Math.random() * 100, 2, 2);
+        pCtx.fillStyle = `rgba(255,255,255,${Math.random() * 0.05})`;
+        pCtx.fillRect(Math.random() * 100, Math.random() * 100, 2, 2);
+    }
+    return ctx.createPattern(canvas, 'repeat');
+};
+
 // UI COMPONENT FOR TOWER ICONS (React side) - HIGH FIDELITY
 const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
   
@@ -176,6 +200,15 @@ const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
                         <rect x="8" y="26" width="24" height="6" fill="#451a03" />
                         <path d="M12,26 L26,10" stroke="#854d0e" strokeWidth="4" />
                         <circle cx="26" cy="10" r="5" fill="#1e293b" />
+                    </g>
+                );
+            case TowerType.LASER: // Mage Tower (Orb/Crystal)
+                return (
+                    <g filter="url(#dropShadow)">
+                        <rect x="14" y="20" width="12" height="16" fill="#1e293b" />
+                        <path d="M12,20 L28,20 L20,10 Z" fill="#475569" />
+                        <circle cx="20" cy="8" r="6" fill="#60a5fa" filter="url(#dropShadow)" />
+                        <circle cx="20" cy="8" r="3" fill="#fff" />
                     </g>
                 );
             default: return <rect x="10" y="10" width="20" height="20" fill="url(#gradMetal)" />;
@@ -689,15 +722,39 @@ const drawProjectile = (ctx: CanvasRenderingContext2D, proj: Projectile, era: nu
         }
     } else if (era === 1) {
         // Arrow
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(-6, -1, 12, 2); // Shaft
-        ctx.fillStyle = '#cbd5e1'; 
-        ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(9, 0); ctx.lineTo(6, 2); ctx.fill(); // Tip
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-9, 0); ctx.lineTo(-6, 2); ctx.fill(); // Feathers
+        // GLOW EFFECT for Magic Towers in Era 1
+        if (proj.visualType === 'MAGIC' || proj.effect === 'FREEZE') {
+             ctx.globalCompositeOperation = 'lighter';
+             ctx.shadowBlur = 10;
+             ctx.shadowColor = proj.effect === 'FREEZE' ? '#06b6d4' : '#a855f7';
+             ctx.fillStyle = proj.effect === 'FREEZE' ? '#67e8f9' : '#d8b4fe';
+             ctx.beginPath(); ctx.arc(0,0, 4, 0, Math.PI*2); ctx.fill();
+             // Trail
+             ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(0,0); ctx.strokeStyle = ctx.fillStyle; ctx.stroke();
+             ctx.globalCompositeOperation = 'source-over';
+             ctx.shadowBlur = 0;
+        } else {
+            // Normal Arrow
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(-6, -1, 12, 2); // Shaft
+            ctx.fillStyle = '#cbd5e1'; 
+            ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(9, 0); ctx.lineTo(6, 2); ctx.fill(); // Tip
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-9, 0); ctx.lineTo(-6, 2); ctx.fill(); // Feathers
+        }
     } else {
-        // Bullet / Rocket
-        if (proj.type === 'AOE') {
+        // Imperial Age
+        if (proj.visualType === 'MAGIC' || proj.effect === 'SHOCK') {
+            // LASER / PLASMA
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = proj.effect === 'SHOCK' ? '#f59e0b' : '#3b82f6';
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(-8, -1.5, 16, 3);
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.shadowBlur = 0;
+        } else if (proj.type === 'AOE') {
+            // ROCKET
             ctx.fillStyle = '#1f2937';
             ctx.fillRect(-6, -2, 12, 4);
             ctx.fillStyle = '#ef4444';
@@ -706,9 +763,10 @@ const drawProjectile = (ctx: CanvasRenderingContext2D, proj: Projectile, era: nu
             ctx.fillStyle = '#fbbf24';
             ctx.beginPath(); ctx.arc(-6, 0, 2 + Math.random()*2, 0, Math.PI*2); ctx.fill();
         } else {
-            // Tracer
+            // TRACER BULLET
             ctx.fillStyle = '#fcd34d';
             ctx.fillRect(-4, -1, 8, 2);
+            ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 5;
         }
     }
     ctx.restore();
@@ -726,6 +784,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const [unlockedThemes, setUnlockedThemes] = useState<string[]>(['default']);
   const [activeThemeId, setActiveThemeId] = useState<string>('default');
+  const bgPatternRef = useRef<CanvasPattern | null>(null);
+  
+  // Screen Shake Intensity
+  const shakeIntensityRef = useRef<number>(0);
   
   // Scenery (Trees, Rocks) - Add more variety
   const sceneryRef = useRef<{x: number, y: number, r: number, type: 'tree' | 'rock' | 'bush' | 'grass'}[]>([]);
@@ -788,8 +850,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Initialize Scenery
+  // Initialize Pattern & Scenery
   useEffect(() => {
+    // Generate noise pattern once
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+        const pattern = createNoisePattern(ctx, THEMES[0].background);
+        if (pattern) bgPatternRef.current = pattern;
+    }
+
     if (sceneryRef.current.length === 0) {
         for (let i = 0; i < 60; i++) {
             const r = Math.random();
@@ -1041,6 +1111,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const update = useCallback(() => {
     const state = gameStateRef.current;
+    
+    // Decay Shake
+    if (shakeIntensityRef.current > 0) {
+        shakeIntensityRef.current *= 0.9;
+        if (shakeIntensityRef.current < 0.5) shakeIntensityRef.current = 0;
+    }
+    
     if (state.isGameOver) return;
 
     const loops = state.gameSpeed;
@@ -1086,7 +1163,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           const dist = distance(p.position, target.position);
           if (dist <= p.speed) {
             if (p.type === 'AOE' && p.blastRadius) {
-               if (loop === 0) audioService.playExplosion();
+               if (loop === 0) {
+                   audioService.playExplosion();
+                   shakeIntensityRef.current = 10; // BIG SHAKE for explosions
+               }
                spawnParticle(p.position, '#ca8a04', 1, 'ring'); // Dirt ring
                spawnParticle(p.position, '#a8a29e', 8, 'debris'); // Rocks
                enemiesRef.current.forEach(e => {
@@ -1189,6 +1269,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             state.lives--;
             triggerHaptic('error');
             audioService.playDamage(); // Enable damage sound
+            shakeIntensityRef.current = 5; // Shake on damage taken
             enemiesRef.current.splice(i, 1);
             if (state.lives <= 0) {
               state.isGameOver = true;
@@ -1246,12 +1327,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
               let speed = 12; 
               let color = '#000';
               let soundType: 'LASER' | 'HEAVY' | 'NORMAL' = 'NORMAL';
+              let visualType: 'ARROW' | 'ROCK' | 'BULLET' | 'MISSILE' | 'MAGIC' = 'ARROW';
 
-              if (tower.type === TowerType.AOE) { pType = 'AOE'; blast = 60 + (tower.level * 10); soundType = 'HEAVY'; speed = 8; }
-              if (tower.type === TowerType.MISSILE) { pType = 'AOE'; blast = 80 + (tower.level * 15); speed = 6; soundType = 'HEAVY'; }
-              if (tower.type === TowerType.LASER) { speed = 25; soundType = 'LASER'; }
-              if (tower.type === TowerType.FROST) { effect = 'FREEZE'; soundType = 'LASER'; }
-              if (tower.type === TowerType.SHOCK) { effect = 'SHOCK'; soundType = 'LASER'; }
+              if (tower.type === TowerType.AOE) { pType = 'AOE'; blast = 60 + (tower.level * 10); soundType = 'HEAVY'; speed = 8; visualType = 'ROCK'; }
+              if (tower.type === TowerType.MISSILE) { pType = 'AOE'; blast = 80 + (tower.level * 15); speed = 6; soundType = 'HEAVY'; visualType='MISSILE'; }
+              if (tower.type === TowerType.LASER) { speed = 25; soundType = 'LASER'; visualType='MAGIC'; }
+              if (tower.type === TowerType.FROST) { effect = 'FREEZE'; soundType = 'LASER'; visualType='MAGIC'; }
+              if (tower.type === TowerType.SHOCK) { effect = 'SHOCK'; soundType = 'LASER'; visualType='MAGIC'; }
               
               if (loop === 0) audioService.playShoot(soundType, state.era); 
 
@@ -1270,7 +1352,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                 blastRadius: blast,
                 effect: effect,
                 velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
-                visualType: 'ARROW' 
+                visualType: visualType 
               });
             }
           }
@@ -1324,9 +1406,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
-    // Draw Game Board Background (Optional: slight darker rect to distinguish play area?)
-    // ctx.fillStyle = 'rgba(0,0,0,0.1)';
-    // ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    // Apply Screen Shake
+    if (shakeIntensityRef.current > 0) {
+        const dx = (Math.random() - 0.5) * shakeIntensityRef.current;
+        const dy = (Math.random() - 0.5) * shakeIntensityRef.current;
+        ctx.translate(dx, dy);
+    }
+
+    // DRAW GROUND PATTERN (Noise)
+    if (bgPatternRef.current) {
+        ctx.fillStyle = bgPatternRef.current;
+        ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.05)'; // Fallback
+        ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
 
     // Scenery (Trees/Rocks)
     sceneryRef.current.forEach(item => {

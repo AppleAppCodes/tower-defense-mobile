@@ -34,7 +34,8 @@ export const ERA_DATA = [
     name: "CASTLE AGE",
     color: "#64748b", // Slate
     maxExp: 1500,
-    availableTowers: [TowerType.BASIC, TowerType.RAPID, TowerType.SNIPER, TowerType.AOE, TowerType.FROST], // Adds AOE + Frost
+    // FIXED: Added LASER to fill the gap before FROST in the UI menu
+    availableTowers: [TowerType.BASIC, TowerType.RAPID, TowerType.SNIPER, TowerType.AOE, TowerType.LASER, TowerType.FROST], 
     towerVisuals: {
       material: "#94a3b8", // Stone Brick
       accent: "#1e3a8a", // Blue Banner
@@ -45,7 +46,7 @@ export const ERA_DATA = [
       [TowerType.RAPID]: "Crossbow",
       [TowerType.SNIPER]: "Ballista",
       [TowerType.AOE]: "Mangonel",
-      [TowerType.LASER]: "Mage Tower",
+      [TowerType.LASER]: "Mage Tower", // Reintroduced as Mage Tower
       [TowerType.FROST]: "Frost Mage",
       [TowerType.SHOCK]: "Tesla Coil (Anachronism)", 
       [TowerType.MISSILE]: "Fire Works"
