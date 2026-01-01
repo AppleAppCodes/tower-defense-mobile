@@ -1,9 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import GameCanvas from './components/GameCanvas';
+import { MainMenu } from './components/MainMenu';
+import { Home } from 'lucide-react';
 
 const App: React.FC = () => {
   const [highScore, setHighScore] = useState(0);
   const [appHeight, setAppHeight] = useState('100vh');
+  const [view, setView] = useState<'MENU' | 'GAME'>('MENU');
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -21,7 +25,6 @@ const App: React.FC = () => {
       tg.enableClosingConfirmation();
 
       // Disable vertical swipes (Newer Telegram API feature) to lock the view
-      // We check if the method exists or if the property is settable
       if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7')) {
           if (typeof tg.disableVerticalSwipes === 'function') {
               tg.disableVerticalSwipes();
@@ -58,13 +61,47 @@ const App: React.FC = () => {
     }
   };
 
+  const handleStartAdventure = () => {
+      // Haptic feedback if available
+      if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+      }
+      setView('GAME');
+  };
+
+  const handleBackToMenu = () => {
+      if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.selectionChanged();
+      }
+      setView('MENU');
+  };
+
   return (
-    // Replaced h-[100vh] with style={{ height: appHeight }} to strictly respect the visible window size
     <div 
       style={{ height: appHeight }} 
       className="w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none overscroll-none"
     >
-      <GameCanvas onGameOver={handleGameOver} />
+      {view === 'MENU' ? (
+          <MainMenu 
+            onStartAdventure={handleStartAdventure} 
+            onStartPvp={() => {}} 
+          />
+      ) : (
+          <div className="relative w-full h-full animate-in fade-in duration-300">
+            {/* Game Container */}
+            <GameCanvas onGameOver={handleGameOver} />
+            
+            {/* Back to Menu Button - Floating Top Left */}
+             <button 
+                onClick={handleBackToMenu}
+                className="absolute top-3 left-3 z-50 p-2 bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full backdrop-blur-md border border-white/10 transition-all shadow-lg active:scale-90"
+                style={{ marginTop: 'env(safe-area-inset-top)' }}
+                aria-label="Back to Menu"
+             >
+                <Home size={18} />
+             </button>
+          </div>
+      )}
     </div>
   );
 };
