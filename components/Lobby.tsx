@@ -76,8 +76,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                         <Users size={20} /> JOIN ROOM
                     </button>
                     
-                    <div className="text-[10px] text-center text-slate-600 mt-2">
-                        Requires Game Server running on localhost:3000
+                    <div className="text-[10px] text-center text-slate-600 mt-2 font-mono">
+                        Server: 157.180.29.14 (Live)
                     </div>
                 </div>
             )}
