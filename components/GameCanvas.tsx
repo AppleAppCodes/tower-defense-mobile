@@ -1181,18 +1181,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   return (
-    <div className="flex flex-col gap-2 p-2 w-full h-full overflow-hidden box-border">
+    <div className="flex flex-col gap-2 w-full h-full overflow-hidden box-border">
       {/* 1. GAME CANVAS AREA (Maximized) */}
-      <div className="flex-1 relative group flex-shrink-0 mx-auto w-full flex justify-center items-center overflow-hidden bg-slate-950 rounded-xl shadow-2xl border border-slate-700/50">
+      <div className="flex-1 relative group flex-shrink-0 mx-auto w-full flex justify-center items-center overflow-hidden bg-slate-950 shadow-2xl">
         <canvas 
           ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerLeave}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', touchAction: 'none' }}
+          style={{ width: '100%', height: '100%', touchAction: 'none' }}
           className="block cursor-crosshair"
         />
+        
+        {/* HUD: Wave Indicator (Permanent, Top-Left) */}
+        {!uiState.isGameOver && hasStartedGame && (
+             <div className="absolute top-3 left-3 z-10 pointer-events-none animate-in fade-in duration-500">
+                <div className="bg-slate-900/60 backdrop-blur-xl border border-blue-500/20 rounded-full px-4 py-1.5 flex items-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
+                    <div className={`w-2 h-2 rounded-full ${uiState.isPlaying ? 'bg-green-400 shadow-[0_0_8px_currentColor] animate-pulse' : 'bg-yellow-500'}`} />
+                    <span className="text-blue-100 font-display text-xs font-bold tracking-widest">WAVE {uiState.wave}</span>
+                </div>
+            </div>
+        )}
         
         {/* START SCREEN & MAP SELECT */}
         {!hasStartedGame && !uiState.isPlaying && !uiState.isGameOver && (
@@ -1280,7 +1290,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       </div>
 
       {/* 2. COMPACT BOTTOM MENU */}
-      <div className="shrink-0 flex flex-col gap-1 w-full min-w-0 pb-1">
+      <div className="shrink-0 flex flex-col gap-1 w-full min-w-0 pb-1 px-2">
         
         {/* ROW 1: COMPACT STATS & CONTROLS */}
         <div className="bg-slate-900/80 backdrop-blur-xl px-3 py-1.5 rounded-lg border border-slate-700/50 flex items-center justify-between w-full shadow-lg h-10">
