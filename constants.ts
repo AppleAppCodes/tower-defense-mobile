@@ -1,4 +1,4 @@
-import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition } from './types';
+import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition, GameTheme } from './types';
 
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
@@ -52,6 +52,57 @@ export const MAPS: MapDefinition[] = [
       { x: 680, y: 100 },
       { x: 680, y: 600 },
     ]
+  }
+];
+
+export const THEMES: GameTheme[] = [
+  {
+    id: 'default',
+    name: 'Deep Space',
+    price: 0,
+    background: '#020617', // Slate 950
+    grid: 'rgba(30, 64, 175, 0.1)',
+    pathOuter: '#1e293b',
+    pathInner: '#0f172a',
+    pathGlow: 'rgba(59, 130, 246, 0.3)',
+    scanline: 'rgba(56, 189, 248, 0.1)',
+    uiAccent: '#3b82f6'
+  },
+  {
+    id: 'mars',
+    name: 'Red Planet',
+    price: 50,
+    background: '#2a0a0a', // Dark Red/Brown
+    grid: 'rgba(220, 38, 38, 0.1)',
+    pathOuter: '#450a0a',
+    pathInner: '#2a0a0a',
+    pathGlow: 'rgba(239, 68, 68, 0.3)',
+    scanline: 'rgba(248, 113, 113, 0.1)',
+    uiAccent: '#ef4444'
+  },
+  {
+    id: 'cyber',
+    name: 'Matrix Grid',
+    price: 100,
+    background: '#000000',
+    grid: 'rgba(34, 197, 94, 0.15)',
+    pathOuter: '#052e16',
+    pathInner: '#000000',
+    pathGlow: 'rgba(34, 197, 94, 0.4)',
+    scanline: 'rgba(74, 222, 128, 0.15)',
+    uiAccent: '#22c55e'
+  },
+  {
+    id: 'void',
+    name: 'Neon Void',
+    price: 250,
+    background: '#0f0518', // Deep Purple
+    grid: 'rgba(192, 38, 211, 0.15)',
+    pathOuter: '#2e073b',
+    pathInner: '#0f0518',
+    pathGlow: 'rgba(216, 180, 254, 0.4)',
+    scanline: 'rgba(232, 121, 249, 0.15)',
+    uiAccent: '#d946ef'
   }
 ];
 

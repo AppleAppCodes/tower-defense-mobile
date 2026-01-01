@@ -36,6 +36,19 @@ export interface MapDefinition {
   waypoints: Vector2D[];
 }
 
+export interface GameTheme {
+  id: string;
+  name: string;
+  price: number; // Stars
+  background: string;
+  grid: string;
+  pathOuter: string;
+  pathInner: string;
+  pathGlow: string;
+  scanline: string;
+  uiAccent: string; // Helper for UI coloring
+}
+
 export interface Entity {
   id: string;
   position: Vector2D;

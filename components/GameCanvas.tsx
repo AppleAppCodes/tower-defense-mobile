@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY } from '../constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY, THEMES } from '../constants';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Plus, X } from 'lucide-react';
+import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Palette, X, Check } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -47,9 +47,6 @@ const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[
 };
 
 const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
-  // Complex SVG icons matching the canvas drawTower logic
-  // ViewBox 0 0 40 40, Center 20 20
-  
   const BasePlate = () => (
     <>
       <circle cx="20" cy="20" r="16" fill="#0f172a" stroke="#334155" strokeWidth="2" />
@@ -62,9 +59,7 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
           <BasePlate />
-          {/* Turret Body */}
           <rect x="14" y="14" width="12" height="12" rx="6" fill="#475569" />
-          {/* Barrels */}
           <rect x="16" y="6" width="3" height="10" fill="#94a3b8" />
           <rect x="21" y="6" width="3" height="10" fill="#94a3b8" />
           <circle cx="20" cy="20" r="4" fill={color} />
@@ -88,7 +83,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
           <BasePlate />
           <rect x="17" y="4" width="6" height="32" fill="#7c2d12" />
-          {/* Coils */}
           <rect x="16" y="10" width="8" height="2" fill={color} />
           <rect x="16" y="18" width="8" height="2" fill={color} />
           <rect x="16" y="26" width="8" height="2" fill={color} />
@@ -110,10 +104,8 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
           <BasePlate />
-          {/* Claws */}
           <path d="M12 10 L20 16 L12 22 Z" fill="#fff" />
           <path d="M28 10 L20 16 L28 22 Z" fill="#fff" />
-          {/* Crystal */}
           <path d="M20 8 L26 20 L20 32 L14 20 Z" fill={color} stroke="white" strokeWidth="0.5" />
         </svg>
       );
@@ -123,7 +115,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
           <BasePlate />
           <circle cx="20" cy="20" r="10" fill="#e0f2fe" />
-          {/* Nozzles */}
           <path d="M20 10 L23 6 L17 6 Z" fill="#0ea5e9" />
           <path d="M29 25 L33 28 L28 30 Z" fill="#0ea5e9" />
           <path d="M11 25 L7 28 L12 30 Z" fill="#0ea5e9" />
@@ -162,7 +153,8 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
   }
 };
 
-const MapPreviewSVG = ({ map }: { map: MapDefinition }) => {
+const MapPreviewSVG = ({ map, activeThemeId }: { map: MapDefinition, activeThemeId: string }) => {
+    const theme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
     const scaleX = 100 / CANVAS_WIDTH;
     const scaleY = 60 / CANVAS_HEIGHT;
     
@@ -172,8 +164,8 @@ const MapPreviewSVG = ({ map }: { map: MapDefinition }) => {
     }
 
     return (
-        <svg width="100" height="60" viewBox="0 0 100 60" className="bg-slate-900/50 rounded border border-slate-700/50 shadow-inner">
-            <path d={pathData} stroke="#3b82f6" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]" />
+        <svg width="100" height="60" viewBox="0 0 100 60" style={{ backgroundColor: theme.background }} className="rounded border border-white/20 shadow-inner">
+            <path d={pathData} stroke={theme.uiAccent} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 };
@@ -182,6 +174,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mousePosRef = useRef<Vector2D | null>(null);
   const isPointerDownRef = useRef<boolean>(false);
+  
+  // Theme State
+  const [unlockedThemes, setUnlockedThemes] = useState<string[]>(['default']);
+  const [activeThemeId, setActiveThemeId] = useState<string>('default');
   
   // Ref for background elements
   const terrainRef = useRef<{
@@ -395,19 +391,95 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const loops = state.gameSpeed;
 
     for (let loop = 0; loop < loops; loop++) {
-        if (!state.isPlaying && state.autoStartTimer > 0) {
-            state.autoStartTimer--;
-            if (state.autoStartTimer === 0) handleStartWave();
-            if (state.autoStartTimer % 60 === 0 && loop === 0) setUiState({ ...state });
-            continue;
-        }
-
-        if (!state.isPlaying) continue;
-
         state.gameTime++;
         // Animate Scanline
         terrainRef.current.scanline = (terrainRef.current.scanline + 2) % CANVAS_HEIGHT;
 
+        // --- VISUAL FX UPDATE LOOP (Runs even if !isPlaying) ---
+        
+        // Update Projectiles (Finish flying even if wave ended)
+        for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
+          const p = projectilesRef.current[i];
+          const target = enemiesRef.current.find(e => e.id === p.targetId);
+          
+          if (!target) {
+            // Projectile continues straight if target lost
+            p.position.x += p.velocity.x;
+            p.position.y += p.velocity.y;
+            
+            // Remove if out of bounds
+            if (p.position.x < 0 || p.position.x > CANVAS_WIDTH || p.position.y < 0 || p.position.y > CANVAS_HEIGHT) {
+                projectilesRef.current.splice(i, 1);
+            }
+            continue;
+          }
+
+          const angle = Math.atan2(target.position.y - p.position.y, target.position.x - p.position.x);
+          p.velocity.x = Math.cos(angle) * p.speed;
+          p.velocity.y = Math.sin(angle) * p.speed;
+          
+          p.position.x += p.velocity.x;
+          p.position.y += p.velocity.y;
+
+          const dist = distance(p.position, target.position);
+          if (dist <= p.speed) {
+            if (p.type === 'AOE' && p.blastRadius) {
+               if (loop === 0) audioService.playExplosion();
+               spawnParticle(p.position, '#f97316', 1, 'ring');
+               spawnParticle(p.position, '#f97316', 10, 'circle');
+               enemiesRef.current.forEach(e => {
+                 if (distance(e.position, p.position) <= p.blastRadius!) {
+                     e.hp -= p.damage;
+                     spawnFloatingText(e.position, Math.floor(p.damage).toString(), '#fff');
+                     if (p.effect === 'FREEZE') e.frozen = 40;
+                 }
+               });
+            } else {
+               if (loop === 0) audioService.playImpact();
+               target.hp -= p.damage;
+               spawnFloatingText(target.position, Math.floor(p.damage).toString(), '#fff');
+               if (p.effect === 'FREEZE') target.frozen = 40;
+               spawnParticle(p.position, p.color, 4, 'circle');
+            }
+            projectilesRef.current.splice(i, 1);
+          }
+        }
+
+        // Update Particles
+        for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+          const p = particlesRef.current[i];
+          p.life -= 0.05;
+          
+          if (p.type === 'ring') {
+              p.size += 2; 
+          } else {
+              p.position.x += p.velocity.x;
+              p.position.y += p.velocity.y;
+          }
+          
+          if (p.life <= 0) particlesRef.current.splice(i, 1);
+        }
+
+        // Update Floating Text
+        for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
+           const ft = floatingTextsRef.current[i];
+           ft.life -= 0.02;
+           ft.position.x += ft.velocity.x;
+           ft.position.y += ft.velocity.y;
+           if (ft.life <= 0) floatingTextsRef.current.splice(i, 1);
+        }
+
+        // --- GAME LOGIC (Wait State) ---
+        if (!state.isPlaying) {
+             if (state.autoStartTimer > 0) {
+                state.autoStartTimer--;
+                if (state.autoStartTimer === 0) handleStartWave();
+                if (state.autoStartTimer % 60 === 0 && loop === 0) setUiState({ ...state });
+             }
+             continue; // Skip enemy/tower logic if waiting
+        }
+
+        // --- COMBAT LOGIC (Spawn, Move, Shoot) ---
         if (spawnQueue.length > 0) {
           if (spawnQueue[0].delay <= 0) {
             const nextEnemy = spawnQueue.shift();
@@ -433,13 +505,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             spawnQueue[0].delay--;
           }
         } else if (enemiesRef.current.length === 0 && state.lives > 0) {
+           // WAVE CLEAR LOGIC
            state.isPlaying = false;
            state.wave++;
            state.money += 50 + (state.wave * 10);
            state.autoStartTimer = AUTO_START_DELAY; 
            triggerHaptic('success');
            setUiState(prev => ({ ...prev, isPlaying: false, wave: state.wave, money: state.money, autoStartTimer: state.autoStartTimer }));
-           break; 
+           // Don't break loop here, just continue to next iteration where !isPlaying catches it
+           continue; 
         }
 
         for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
@@ -527,56 +601,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           }
         });
 
-        for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
-          const p = projectilesRef.current[i];
-          const target = enemiesRef.current.find(e => e.id === p.targetId);
-          
-          if (!target) {
-            // Projectile continues straight if target lost
-            p.position.x += p.velocity.x;
-            p.position.y += p.velocity.y;
-            
-            // Remove if out of bounds
-            if (p.position.x < 0 || p.position.x > CANVAS_WIDTH || p.position.y < 0 || p.position.y > CANVAS_HEIGHT) {
-                projectilesRef.current.splice(i, 1);
-            }
-            continue;
-          }
-
-          // Homing for missiles, others straight line if not super close?
-          // For simplicity, all homing slightly to ensure hit feel is good
-          const angle = Math.atan2(target.position.y - p.position.y, target.position.x - p.position.x);
-          p.velocity.x = Math.cos(angle) * p.speed;
-          p.velocity.y = Math.sin(angle) * p.speed;
-          
-          p.position.x += p.velocity.x;
-          p.position.y += p.velocity.y;
-
-          const dist = distance(p.position, target.position);
-          if (dist <= p.speed) {
-            // Hit logic
-            if (p.type === 'AOE' && p.blastRadius) {
-               if (loop === 0) audioService.playExplosion();
-               spawnParticle(p.position, '#f97316', 1, 'ring'); // Ring shockwave
-               spawnParticle(p.position, '#f97316', 10, 'circle');
-               enemiesRef.current.forEach(e => {
-                 if (distance(e.position, p.position) <= p.blastRadius!) {
-                     e.hp -= p.damage;
-                     spawnFloatingText(e.position, Math.floor(p.damage).toString(), '#fff');
-                     if (p.effect === 'FREEZE') e.frozen = 40;
-                 }
-               });
-            } else {
-               if (loop === 0) audioService.playImpact();
-               target.hp -= p.damage;
-               spawnFloatingText(target.position, Math.floor(p.damage).toString(), '#fff');
-               if (p.effect === 'FREEZE') target.frozen = 40;
-               spawnParticle(p.position, p.color, 4, 'circle');
-            }
-            projectilesRef.current.splice(i, 1);
-          }
-        }
-
+        // Clean up dead enemies
         for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
           if (enemiesRef.current[i].hp <= 0) {
             state.money += enemiesRef.current[i].moneyReward;
@@ -585,28 +610,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             spawnParticle(enemiesRef.current[i].position, enemiesRef.current[i].color, 8, 'circle');
             enemiesRef.current.splice(i, 1);
           }
-        }
-
-        for (let i = particlesRef.current.length - 1; i >= 0; i--) {
-          const p = particlesRef.current[i];
-          p.life -= 0.05;
-          
-          if (p.type === 'ring') {
-              p.size += 2; // Expand ring
-          } else {
-              p.position.x += p.velocity.x;
-              p.position.y += p.velocity.y;
-          }
-          
-          if (p.life <= 0) particlesRef.current.splice(i, 1);
-        }
-
-        for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
-           const ft = floatingTextsRef.current[i];
-           ft.life -= 0.02;
-           ft.position.x += ft.velocity.x;
-           ft.position.y += ft.velocity.y;
-           if (ft.life <= 0) floatingTextsRef.current.splice(i, 1);
         }
     }
 
@@ -814,9 +817,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Get current theme based on state
+    const theme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
+
     // 1. Background
-    // Deep Space Blue
-    ctx.fillStyle = '#020617'; 
+    ctx.fillStyle = theme.background; 
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Animated Starfield
@@ -831,7 +836,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.globalAlpha = 1.0;
 
     // Tactical Grid
-    ctx.strokeStyle = 'rgba(30, 64, 175, 0.1)';
+    ctx.strokeStyle = theme.grid;
     ctx.lineWidth = 1;
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_HEIGHT); ctx.stroke();
@@ -843,17 +848,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     // 2. Scanline Effect
     const scanY = terrainRef.current.scanline;
     const grad = ctx.createLinearGradient(0, scanY, 0, scanY + 40);
-    grad.addColorStop(0, 'rgba(56, 189, 248, 0.0)');
-    grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.1)');
-    grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+    grad.addColorStop(0, theme.scanline.replace(/[\d.]+\)$/g, '0.0)'));
+    grad.addColorStop(0.5, theme.scanline);
+    grad.addColorStop(1, theme.scanline.replace(/[\d.]+\)$/g, '0.0)'));
     ctx.fillStyle = grad;
     ctx.fillRect(0, scanY, CANVAS_WIDTH, 40);
 
     // 3. Path with Glow
     ctx.save();
     ctx.shadowBlur = 15;
-    ctx.shadowColor = 'rgba(59, 130, 246, 0.3)';
-    ctx.strokeStyle = '#1e293b'; 
+    ctx.shadowColor = theme.pathGlow;
+    ctx.strokeStyle = theme.pathOuter; 
     ctx.lineWidth = 44; 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -864,12 +869,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.shadowBlur = 0;
 
     // Inner path track
-    ctx.strokeStyle = '#0f172a';
+    ctx.strokeStyle = theme.pathInner;
     ctx.lineWidth = 36;
     ctx.stroke();
     
     // Dashed guide
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+    ctx.strokeStyle = theme.pathGlow;
     ctx.lineWidth = 2;
     ctx.setLineDash([10, 20]);
     ctx.stroke();
@@ -1038,7 +1043,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             ctx.stroke();
         }
     }
-  }, [selectedTowerType, selectedPlacedTowerId, currentMap]);
+  }, [selectedTowerType, selectedPlacedTowerId, currentMap, activeThemeId]); // Add activeThemeId dependency
 
   useEffect(() => {
     let animationFrameId: number;
@@ -1181,23 +1186,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     setUiState({...gameStateRef.current});
   };
 
-  const handleShopPurchase = (amount: number, stars: number) => {
-    // NOTE: In a real production app, you would fetch a generated invoice slug from your backend here.
-    // Example: const slug = await fetch('/api/create-invoice', { method: 'POST', body: JSON.stringify({ stars }) }).then(r => r.json());
-    
-    // window.Telegram.WebApp.openInvoice(slug, (status) => {
-    //   if (status === 'paid') {
-    //      // Handle success
-    //   }
-    // });
-    
-    // For this demonstration/frontend-only prototype, we simulate a successful transaction:
-    triggerHaptic('success');
-    audioService.playBuild();
-    gameStateRef.current.money += amount;
-    setUiState({...gameStateRef.current});
-    spawnFloatingText({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }, `+${amount} CREDITS`, '#fbbf24');
-    setIsStoreOpen(false);
+  // --- SKIN SHOP LOGIC ---
+  const handleBuySkin = (themeId: string, price: number) => {
+      // Mock logic for Telegram Stars purchase
+      // window.Telegram.WebApp.openInvoice(...)
+      
+      triggerHaptic('success');
+      audioService.playBuild();
+      
+      setUnlockedThemes(prev => [...prev, themeId]);
+      setActiveThemeId(themeId); // Auto-equip
+      spawnFloatingText({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }, `THEME ACQUIRED`, '#fbbf24');
+  };
+
+  const handleEquipSkin = (themeId: string) => {
+      setActiveThemeId(themeId);
+      triggerHaptic('selection');
   };
 
   return (
@@ -1234,7 +1238,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                     <div className="flex items-center justify-between mb-4">
                         <button onClick={() => changeMap('prev')} className="p-2 text-slate-400 hover:text-white transition-colors"><ChevronLeft /></button>
                         <div className="flex flex-col items-center gap-2">
-                             <MapPreviewSVG map={currentMap} />
+                             <MapPreviewSVG map={currentMap} activeThemeId={activeThemeId} />
                              <div className="font-bold text-lg text-blue-400 font-display">{currentMap.name}</div>
                              <div className={`text-[10px] px-2 py-0.5 rounded font-bold tracking-wider ${
                                  currentMap.difficulty === 'EASY' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 
@@ -1254,73 +1258,65 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             </div>
         )}
 
-        {/* SHOP MODAL */}
+        {/* SKIN SHOP MODAL */}
         {isStoreOpen && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-40 backdrop-blur-md animate-in fade-in duration-200">
-                <div className="bg-slate-900 border border-yellow-500/30 rounded-2xl p-6 w-[300px] shadow-[0_0_50px_rgba(234,179,8,0.2)] relative">
-                    <button onClick={() => setIsStoreOpen(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white p-2">
+                <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-4 w-[320px] shadow-[0_0_50px_rgba(168,85,247,0.2)] relative max-h-[90%] flex flex-col">
+                    <button onClick={() => setIsStoreOpen(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white p-2 z-10">
                         <X size={20} />
                     </button>
                     
-                    <div className="text-center mb-6">
-                        <h2 className="text-2xl font-display text-yellow-400 mb-1 tracking-widest">SUPPLY DROP</h2>
-                        <p className="text-slate-400 text-xs">Acquire resources via Star Command</p>
+                    <div className="text-center mb-4">
+                        <h2 className="text-xl font-display text-purple-400 mb-1 tracking-widest">VISUAL UPGRADES</h2>
+                        <p className="text-slate-400 text-xs">Customize tactical interface</p>
                     </div>
 
-                    <div className="space-y-3">
-                        <button 
-                            onClick={() => handleShopPurchase(500, 50)}
-                            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-3 flex items-center justify-between group transition-all"
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="bg-yellow-500/10 p-2 rounded-full border border-yellow-500/20">
-                                    <Coins size={20} className="text-yellow-400" />
-                                </div>
-                                <div className="text-left">
-                                    <div className="font-bold text-white text-sm">500 Credits</div>
-                                    <div className="text-[10px] text-slate-400">Basic Supply</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold group-hover:bg-blue-500 transition-colors">
-                                <Star size={12} fill="currentColor" /> 50
-                            </div>
-                        </button>
+                    <div className="overflow-y-auto space-y-3 pr-2 scrollbar-hide">
+                        {THEMES.map(theme => {
+                            const isOwned = unlockedThemes.includes(theme.id);
+                            const isActive = activeThemeId === theme.id;
+                            
+                            return (
+                                <div key={theme.id} className={`rounded-xl p-3 border transition-all relative overflow-hidden group ${isActive ? 'border-green-500 bg-green-500/5' : 'border-slate-700 bg-slate-800'}`}>
+                                    <div className="flex items-center gap-3">
+                                        {/* Color Preview */}
+                                        <div className="w-12 h-12 rounded-lg shadow-inner border border-white/10 shrink-0" style={{ background: theme.background }}>
+                                            <div className="w-full h-full opacity-30" style={{ backgroundImage: `linear-gradient(${theme.grid} 1px, transparent 1px), linear-gradient(90deg, ${theme.grid} 1px, transparent 1px)`, backgroundSize: '8px 8px' }} />
+                                        </div>
+                                        
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-white text-sm font-display flex items-center gap-2">
+                                                {theme.name}
+                                                {isActive && <div className="text-[9px] bg-green-500 text-black px-1.5 rounded font-bold">ACTIVE</div>}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 truncate">Holographic Field Mod</div>
+                                        </div>
 
-                        <button 
-                            onClick={() => handleShopPurchase(1200, 100)}
-                            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-3 flex items-center justify-between group transition-all"
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="bg-yellow-500/10 p-2 rounded-full border border-yellow-500/20">
-                                    <Coins size={20} className="text-yellow-400" />
+                                        <div className="shrink-0">
+                                            {isOwned ? (
+                                                isActive ? (
+                                                    <div className="text-green-500 p-2"><Check size={20} /></div>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => handleEquipSkin(theme.id)}
+                                                        className="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+                                                    >
+                                                        EQUIP
+                                                    </button>
+                                                )
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleBuySkin(theme.id, theme.price)}
+                                                    className="px-3 py-1.5 rounded text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1 shadow-lg shadow-blue-500/20"
+                                                >
+                                                    <Star size={12} fill="currentColor" /> {theme.price}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="text-left">
-                                    <div className="font-bold text-white text-sm">1200 Credits</div>
-                                    <div className="text-[10px] text-slate-400">Tactical Pack</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold group-hover:bg-blue-500 transition-colors">
-                                <Star size={12} fill="currentColor" /> 100
-                            </div>
-                        </button>
-
-                        <button 
-                            onClick={() => handleShopPurchase(2500, 200)}
-                            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-3 flex items-center justify-between group transition-all"
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="bg-yellow-500/10 p-2 rounded-full border border-yellow-500/20">
-                                    <Coins size={20} className="text-yellow-400" />
-                                </div>
-                                <div className="text-left">
-                                    <div className="font-bold text-white text-sm">2500 Credits</div>
-                                    <div className="text-[10px] text-slate-400">War Chest</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold group-hover:bg-blue-500 transition-colors">
-                                <Star size={12} fill="currentColor" /> 200
-                            </div>
-                        </button>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -1394,12 +1390,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                 <div className="flex items-center gap-1.5 relative">
                     <Coins className="text-yellow-400 w-3.5 h-3.5 drop-shadow-sm" />
                     <span className="text-sm font-bold text-yellow-100">{uiState.money}</span>
-                    <button 
-                        onClick={() => setIsStoreOpen(true)}
-                        className="ml-1 w-4 h-4 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white"
-                    >
-                        <Plus size={10} />
-                    </button>
                 </div>
                 <div className="flex items-center gap-1.5">
                     <Shield className="text-blue-400 w-3.5 h-3.5 drop-shadow-sm" />
@@ -1408,6 +1398,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
              </div>
 
              <div className="flex items-center gap-2">
+                 {/* Skin Shop Toggle */}
+                 <button 
+                    onClick={() => setIsStoreOpen(true)}
+                    className="p-1 px-2 rounded flex items-center gap-1 font-bold text-[10px] transition-colors border bg-purple-500/20 border-purple-400/50 text-purple-200"
+                 >
+                    <Palette size={12} /> SKIN
+                 </button>
+
                  {/* Speed Toggle */}
                  <button 
                   onClick={toggleGameSpeed}
