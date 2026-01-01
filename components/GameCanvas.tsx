@@ -1,9 +1,8 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY } from '../constants';
-import { getTacticalAdvice } from '../services/geminiService';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Bot, Play, RefreshCw, Rocket, Timer, Map as MapIcon, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, ArrowUp } from 'lucide-react';
+import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -47,7 +46,7 @@ const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[
   return false;
 };
 
-const TowerIcon = ({ type, color, className }: { type: TowerType; color: string; className?: string }) => {
+const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
   // Complex SVG icons matching the canvas drawTower logic
   // ViewBox 0 0 40 40, Center 20 20
   
@@ -58,107 +57,109 @@ const TowerIcon = ({ type, color, className }: { type: TowerType; color: string;
     </>
   );
 
-  return (
-    <svg viewBox="0 0 40 40" fill="none" className={`drop-shadow-md ${className || 'w-10 h-10'}`}>
-      {(() => {
-        switch (type) {
-          case TowerType.BASIC: // Sentry - Dual Barrel
-            return (
-              <>
-                <BasePlate />
-                <rect x="14" y="14" width="12" height="12" rx="6" fill="#475569" />
-                <rect x="16" y="6" width="3" height="10" fill="#94a3b8" />
-                <rect x="21" y="6" width="3" height="10" fill="#94a3b8" />
-                <circle cx="20" cy="20" r="4" fill={color} />
-              </>
-            );
+  switch (type) {
+    case TowerType.BASIC: // Sentry - Dual Barrel
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          {/* Turret Body */}
+          <rect x="14" y="14" width="12" height="12" rx="6" fill="#475569" />
+          {/* Barrels */}
+          <rect x="16" y="6" width="3" height="10" fill="#94a3b8" />
+          <rect x="21" y="6" width="3" height="10" fill="#94a3b8" />
+          <circle cx="20" cy="20" r="4" fill={color} />
+        </svg>
+      );
 
-          case TowerType.RAPID: // Gatling
-            return (
-              <>
-                <BasePlate />
-                <rect x="12" y="14" width="16" height="14" rx="1" fill="#3f6212" />
-                <rect x="18" y="6" width="4" height="8" fill="#a3e635" />
-                <rect x="13" y="8" width="3" height="6" fill="#a3e635" />
-                <rect x="24" y="8" width="3" height="6" fill="#a3e635" />
-                <circle cx="14" cy="18" r="3" fill="#1e293b" />
-              </>
-            );
+    case TowerType.RAPID: // Gatling
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          <rect x="12" y="14" width="16" height="14" rx="1" fill="#3f6212" />
+          <rect x="18" y="6" width="4" height="8" fill="#a3e635" />
+          <rect x="13" y="8" width="3" height="6" fill="#a3e635" />
+          <rect x="24" y="8" width="3" height="6" fill="#a3e635" />
+          <circle cx="14" cy="18" r="3" fill="#1e293b" />
+        </svg>
+      );
 
-          case TowerType.SNIPER: // Railgun
-            return (
-              <>
-                <BasePlate />
-                <rect x="17" y="4" width="6" height="32" fill="#7c2d12" />
-                <rect x="16" y="10" width="8" height="2" fill={color} />
-                <rect x="16" y="18" width="8" height="2" fill={color} />
-                <rect x="16" y="26" width="8" height="2" fill={color} />
-                <circle cx="20" cy="30" r="5" fill="#0ea5e9" />
-              </>
-            );
+    case TowerType.SNIPER: // Railgun
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          <rect x="17" y="4" width="6" height="32" fill="#7c2d12" />
+          {/* Coils */}
+          <rect x="16" y="10" width="8" height="2" fill={color} />
+          <rect x="16" y="18" width="8" height="2" fill={color} />
+          <rect x="16" y="26" width="8" height="2" fill={color} />
+          <circle cx="20" cy="30" r="5" fill="#0ea5e9" />
+        </svg>
+      );
 
-          case TowerType.AOE: // Howitzer
-            return (
-              <>
-                <BasePlate />
-                <path d="M10 12 L30 12 L30 28 L10 28 Z" fill="#7f1d1d" />
-                <rect x="14" y="6" width="12" height="10" fill="#1e293b" />
-                <rect x="18" y="4" width="4" height="4" fill="#000" />
-              </>
-            );
+    case TowerType.AOE: // Howitzer
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          <path d="M10 12 L30 12 L30 28 L10 28 Z" fill="#7f1d1d" />
+          <rect x="14" y="6" width="12" height="10" fill="#1e293b" />
+          <rect x="18" y="4" width="4" height="4" fill="#000" />
+        </svg>
+      );
 
-          case TowerType.LASER: // Prism
-            return (
-              <>
-                <BasePlate />
-                <path d="M12 10 L20 16 L12 22 Z" fill="#fff" />
-                <path d="M28 10 L20 16 L28 22 Z" fill="#fff" />
-                <path d="M20 8 L26 20 L20 32 L14 20 Z" fill={color} stroke="white" strokeWidth="0.5" />
-              </>
-            );
+    case TowerType.LASER: // Prism
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          {/* Claws */}
+          <path d="M12 10 L20 16 L12 22 Z" fill="#fff" />
+          <path d="M28 10 L20 16 L28 22 Z" fill="#fff" />
+          {/* Crystal */}
+          <path d="M20 8 L26 20 L20 32 L14 20 Z" fill={color} stroke="white" strokeWidth="0.5" />
+        </svg>
+      );
 
-          case TowerType.FROST: // Cryo
-            return (
-              <>
-                <BasePlate />
-                <circle cx="20" cy="20" r="10" fill="#e0f2fe" />
-                <path d="M20 10 L23 6 L17 6 Z" fill="#0ea5e9" />
-                <path d="M29 25 L33 28 L28 30 Z" fill="#0ea5e9" />
-                <path d="M11 25 L7 28 L12 30 Z" fill="#0ea5e9" />
-                <circle cx="20" cy="20" r="4" fill="#fff" />
-              </>
-            );
+    case TowerType.FROST: // Cryo
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          <circle cx="20" cy="20" r="10" fill="#e0f2fe" />
+          {/* Nozzles */}
+          <path d="M20 10 L23 6 L17 6 Z" fill="#0ea5e9" />
+          <path d="M29 25 L33 28 L28 30 Z" fill="#0ea5e9" />
+          <path d="M11 25 L7 28 L12 30 Z" fill="#0ea5e9" />
+          <circle cx="20" cy="20" r="4" fill="#fff" />
+        </svg>
+      );
 
-          case TowerType.SHOCK: // Tesla
-            return (
-              <>
-                <BasePlate />
-                <rect x="14" y="14" width="12" height="12" fill="#854d0e" />
-                <circle cx="20" cy="20" r="8" stroke={color} strokeWidth="2" strokeDasharray="2 2" />
-                <circle cx="20" cy="20" r="4" fill="#fff" className="animate-pulse" />
-              </>
-            );
+    case TowerType.SHOCK: // Tesla
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          <rect x="14" y="14" width="12" height="12" fill="#854d0e" />
+          <circle cx="20" cy="20" r="8" stroke={color} strokeWidth="2" strokeDasharray="2 2" />
+          <circle cx="20" cy="20" r="4" fill="#fff" className="animate-pulse" />
+        </svg>
+      );
 
-          case TowerType.MISSILE: // Swarm
-            return (
-              <>
-                <BasePlate />
-                <rect x="10" y="10" width="20" height="20" rx="4" fill="#581c87" />
-                <circle cx="15" cy="15" r="3" fill="#000" />
-                <circle cx="25" cy="15" r="3" fill="#000" />
-                <circle cx="15" cy="25" r="3" fill="#000" />
-                <circle cx="25" cy="25" r="3" fill="#000" />
-                <circle cx="15" cy="15" r="1.5" fill={color} />
-                <circle cx="25" cy="15" r="1.5" fill={color} />
-                <circle cx="15" cy="25" r="1.5" fill={color} />
-                <circle cx="25" cy="25" r="1.5" fill={color} />
-              </>
-            );
-          default: return <circle cx="20" cy="20" r="10" fill={color} />;
-        }
-      })()}
-    </svg>
-  );
+    case TowerType.MISSILE: // Swarm
+      return (
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
+          <BasePlate />
+          <rect x="10" y="10" width="20" height="20" rx="4" fill="#581c87" />
+          <circle cx="15" cy="15" r="3" fill="#000" />
+          <circle cx="25" cy="15" r="3" fill="#000" />
+          <circle cx="15" cy="25" r="3" fill="#000" />
+          <circle cx="25" cy="25" r="3" fill="#000" />
+          <circle cx="15" cy="15" r="1.5" fill={color} />
+          <circle cx="25" cy="15" r="1.5" fill={color} />
+          <circle cx="15" cy="25" r="1.5" fill={color} />
+          <circle cx="25" cy="25" r="1.5" fill={color} />
+        </svg>
+      );
+      
+    default:
+      return <div className="w-10 h-10 rounded-full bg-gray-500" />;
+  }
 };
 
 const MapPreviewSVG = ({ map }: { map: MapDefinition }) => {
@@ -211,8 +212,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{title: string, subtitle?: string, color: string, type: 'info' | 'boss'} | null>(null);
   
-  const [advisorMessage, setAdvisorMessage] = useState<string>("Planetary defense systems online. Select a mission.");
-  const [isAdvisorLoading, setIsAdvisorLoading] = useState(false);
   const [spawnQueue, setSpawnQueue] = useState<{ type: EnemyType; delay: number }[]>([]);
   const [userName, setUserName] = useState<string>("");
   const [currentMap, setCurrentMap] = useState<MapDefinition>(MAPS[0]);
@@ -1120,15 +1119,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         mousePosRef.current = null;
     }
   };
-
-  const handleConsultAI = async () => {
-    setIsAdvisorLoading(true);
-    triggerHaptic('medium');
-    const advice = await getTacticalAdvice(gameStateRef.current, towersRef.current);
-    setAdvisorMessage(advice);
-    setIsAdvisorLoading(false);
-    triggerHaptic('success');
-  };
   
   const resetGame = () => {
       gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1, gameSpeed: 1 };
@@ -1136,7 +1126,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = []; floatingTextsRef.current = [];
       setSpawnQueue([]);
       setUiState({...gameStateRef.current});
-      setAdvisorMessage("Systems reset. Awaiting command.");
       triggerHaptic('medium');
   };
 
@@ -1192,17 +1181,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   return (
-    <div className="flex flex-col gap-2 p-2 w-full max-w-[100vw] mx-auto h-full overflow-hidden box-border">
+    <div className="flex flex-col gap-2 p-2 w-full h-full overflow-hidden box-border">
       {/* 1. GAME CANVAS AREA (Maximized) */}
-      <div className="relative group flex-shrink-0 mx-auto w-full flex justify-center items-center overflow-hidden">
+      <div className="flex-1 relative group flex-shrink-0 mx-auto w-full flex justify-center items-center overflow-hidden bg-slate-950 rounded-xl shadow-2xl border border-slate-700/50">
         <canvas 
           ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerLeave}
-          style={{ width: '100%', height: 'auto', maxHeight: '62vh', objectFit: 'contain', touchAction: 'none' }}
-          className="block bg-slate-950 rounded-xl shadow-2xl border border-slate-700/50 cursor-crosshair"
+          style={{ width: '100%', height: '100%', objectFit: 'contain', touchAction: 'none' }}
+          className="block cursor-crosshair"
         />
         
         {/* START SCREEN & MAP SELECT */}
@@ -1291,10 +1280,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       </div>
 
       {/* 2. COMPACT BOTTOM MENU */}
-      <div className="flex-1 flex flex-col gap-1 w-full min-w-0">
+      <div className="shrink-0 flex flex-col gap-1 w-full min-w-0 pb-1">
         
-        {/* ROW 1: COMPACT STATS */}
-        <div className="bg-slate-900/60 backdrop-blur-xl px-3 py-1.5 rounded-lg border border-slate-700/50 flex items-center justify-between w-full shadow-lg h-10">
+        {/* ROW 1: COMPACT STATS & CONTROLS */}
+        <div className="bg-slate-900/80 backdrop-blur-xl px-3 py-1.5 rounded-lg border border-slate-700/50 flex items-center justify-between w-full shadow-lg h-10">
              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                     <Heart className="text-red-500 w-3.5 h-3.5 drop-shadow-sm" />
@@ -1322,7 +1311,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         </div>
 
         {/* ROW 2: PLAY BTN + TOWERS (Combined) */}
-        <div className="bg-slate-900/60 backdrop-blur-xl p-1 rounded-lg border border-slate-700/50 flex gap-2 w-full shadow-lg h-20 items-center overflow-hidden">
+        <div className="bg-slate-900/80 backdrop-blur-xl p-1 rounded-lg border border-slate-700/50 flex gap-2 w-full shadow-lg h-20 items-center overflow-hidden">
              {/* Play Button */}
              <button 
                   onClick={handleStartWave}
@@ -1361,22 +1350,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                                 ? 'border-blue-500 bg-blue-500/10' 
                                 : 'border-slate-800 bg-slate-950/50 hover:bg-slate-900'}`}
                     >
-                        <TowerIcon type={tower.type} color={tower.color} className="w-8 h-8" />
+                        <div className="w-8 h-8">
+                             <TowerIcon type={tower.type} color={tower.color} />
+                        </div>
                         <div className="text-[9px] text-yellow-500 font-mono font-bold">${tower.cost}</div>
                     </button>
                 ))}
             </div>
-        </div>
-
-        {/* ROW 3: AI FOOTER (Compact) */}
-        <div className="bg-slate-900/60 backdrop-blur-xl px-2 py-1 rounded-lg border border-slate-700/50 w-full shadow-lg flex items-center gap-2 h-9 min-h-[36px]">
-             <Bot size={14} className="text-blue-400 shrink-0" />
-             <div className="flex-1 text-[10px] text-blue-200 font-mono truncate">
-                 <span className="text-blue-500 mr-1 animate-pulse">_</span>{advisorMessage}
-             </div>
-             <button onClick={handleConsultAI} disabled={isAdvisorLoading} className="px-2 py-0.5 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-500/30 text-blue-300 rounded text-[9px] font-bold transition font-mono uppercase tracking-widest shrink-0 whitespace-nowrap">
-                 {isAdvisorLoading ? "..." : "SCAN"}
-             </button>
         </div>
       </div>
     </div>
