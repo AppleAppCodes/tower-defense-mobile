@@ -74,6 +74,7 @@ export interface Projectile extends Entity {
   type: 'SINGLE' | 'AOE';
   blastRadius?: number;
   effect?: 'FREEZE' | 'SHOCK'; // Status effects
+  velocity: Vector2D; // Added for trails
 }
 
 export interface Particle {
@@ -84,6 +85,7 @@ export interface Particle {
   maxLife: number;
   color: string;
   size: number;
+  type: 'circle' | 'ring'; // New type for shockwaves
 }
 
 export interface FloatingText {
