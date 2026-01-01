@@ -1,8 +1,9 @@
+
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText, PerkDrop, ActivePerk, PerkType } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, PERK_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY, THEMES } from '../constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, PERK_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY, THEMES, ERA_DATA } from '../constants';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Palette, X, Check } from 'lucide-react';
+import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Palette, X, Check, ArrowUpCircle } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -46,250 +47,465 @@ const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[
   return false;
 };
 
-const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
-  const BasePlate = () => (
-    <>
-      <circle cx="20" cy="20" r="16" fill="#0f172a" stroke="#334155" strokeWidth="2" />
-      <circle cx="20" cy="20" r="10" fill="#1e293b" />
-    </>
-  );
-
-  switch (type) {
-    case TowerType.BASIC: // Sentry
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <rect x="14" y="14" width="12" height="12" rx="6" fill="#475569" />
-          <rect x="16" y="6" width="3" height="10" fill="#94a3b8" />
-          <rect x="21" y="6" width="3" height="10" fill="#94a3b8" />
-          <circle cx="20" cy="20" r="4" fill={color} />
-        </svg>
-      );
-    case TowerType.RAPID: // Gatling
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <rect x="12" y="14" width="16" height="14" rx="1" fill="#3f6212" />
-          <rect x="18" y="6" width="4" height="8" fill="#a3e635" />
-          <rect x="13" y="8" width="3" height="6" fill="#a3e635" />
-          <rect x="24" y="8" width="3" height="6" fill="#a3e635" />
-          <circle cx="14" cy="18" r="3" fill="#1e293b" />
-        </svg>
-      );
-    case TowerType.SNIPER: // Railgun
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <rect x="17" y="4" width="6" height="32" fill="#7c2d12" />
-          <rect x="16" y="10" width="8" height="2" fill={color} />
-          <rect x="16" y="18" width="8" height="2" fill={color} />
-          <rect x="16" y="26" width="8" height="2" fill={color} />
-          <circle cx="20" cy="30" r="5" fill="#0ea5e9" />
-        </svg>
-      );
-    case TowerType.AOE: // Howitzer
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <path d="M10 12 L30 12 L30 28 L10 28 Z" fill="#7f1d1d" />
-          <rect x="14" y="6" width="12" height="10" fill="#1e293b" />
-          <rect x="18" y="4" width="4" height="4" fill="#000" />
-        </svg>
-      );
-    case TowerType.LASER: // Prism
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <path d="M12 10 L20 16 L12 22 Z" fill="#fff" />
-          <path d="M28 10 L20 16 L28 22 Z" fill="#fff" />
-          <path d="M20 8 L26 20 L20 32 L14 20 Z" fill={color} stroke="white" strokeWidth="0.5" />
-        </svg>
-      );
-    case TowerType.FROST: // Cryo
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <circle cx="20" cy="20" r="10" fill="#e0f2fe" />
-          <path d="M20 10 L23 6 L17 6 Z" fill="#0ea5e9" />
-          <path d="M29 25 L33 28 L28 30 Z" fill="#0ea5e9" />
-          <path d="M11 25 L7 28 L12 30 Z" fill="#0ea5e9" />
-          <circle cx="20" cy="20" r="4" fill="#fff" />
-        </svg>
-      );
-    case TowerType.SHOCK: // Tesla
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <rect x="14" y="14" width="12" height="12" fill="#854d0e" />
-          <circle cx="20" cy="20" r="8" stroke={color} strokeWidth="2" strokeDasharray="2 2" />
-          <circle cx="20" cy="20" r="4" fill="#fff" className="animate-pulse" />
-        </svg>
-      );
-    case TowerType.MISSILE: // Swarm
-      return (
-        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
-          <BasePlate />
-          <rect x="10" y="10" width="20" height="20" rx="4" fill="#581c87" />
-          <circle cx="15" cy="15" r="3" fill="#000" />
-          <circle cx="25" cy="15" r="3" fill="#000" />
-          <circle cx="15" cy="25" r="3" fill="#000" />
-          <circle cx="25" cy="25" r="3" fill="#000" />
-          <circle cx="15" cy="15" r="1.5" fill={color} />
-          <circle cx="25" cy="15" r="1.5" fill={color} />
-          <circle cx="15" cy="25" r="1.5" fill={color} />
-          <circle cx="25" cy="25" r="1.5" fill={color} />
-        </svg>
-      );
-    default:
-      return <div className="w-10 h-10 rounded-full bg-gray-500" />;
+// UI COMPONENT FOR TOWER ICONS (React side) - NOW MATCHES IN-GAME GRAPHICS 1:1
+const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
+  
+  // Helper to render the specific SVG shapes that match the canvas drawing logic
+  const RenderTower = () => {
+    // STONE AGE
+    if (era === 0) {
+        const woodDark = '#451a03';
+        const woodLight = '#78350f';
+        const skin = '#fcd34d';
+        
+        switch(type) {
+            case TowerType.BASIC: // Slinger
+                return (
+                    <g>
+                        {/* Base */}
+                        <circle cx="20" cy="20" r="14" fill="#57534e" stroke={woodDark} strokeWidth="2" />
+                        <rect x="12" y="12" width="16" height="16" fill={woodLight} rx="4" />
+                        {/* Unit */}
+                        <circle cx="20" cy="20" r="6" fill={skin} stroke="#000" strokeWidth="1" />
+                        {/* Sling */}
+                        <path d="M24 20 L28 16" stroke={woodDark} strokeWidth="3" />
+                    </g>
+                );
+            case TowerType.RAPID: // Thrower
+                return (
+                    <g>
+                        <circle cx="20" cy="20" r="14" fill="#57534e" />
+                        <circle cx="16" cy="16" r="4" fill="#a8a29e" />
+                        <circle cx="24" cy="16" r="4" fill="#a8a29e" />
+                        <circle cx="20" cy="24" r="4" fill="#a8a29e" />
+                        <circle cx="20" cy="20" r="6" fill={skin} stroke="#000" strokeWidth="1" />
+                    </g>
+                );
+            case TowerType.SNIPER: // Watchtower
+                return (
+                    <g>
+                        <rect x="10" y="10" width="20" height="20" fill={woodDark} />
+                        <rect x="14" y="14" width="12" height="12" fill="#a8a29e" />
+                        <line x1="20" y1="20" x2="32" y2="20" stroke="#000" strokeWidth="2" /> {/* Spear */}
+                    </g>
+                );
+            case TowerType.AOE: // Rock Trap
+                return (
+                    <g>
+                        <rect x="8" y="8" width="24" height="24" fill="#292524" rx="2" />
+                        <circle cx="14" cy="14" r="5" fill="#78716c" />
+                        <circle cx="26" cy="14" r="5" fill="#78716c" />
+                        <circle cx="14" cy="26" r="5" fill="#78716c" />
+                        <circle cx="26" cy="26" r="5" fill="#78716c" />
+                    </g>
+                );
+            default: return <circle cx="20" cy="20" r="12" fill={woodLight} />;
+        }
+    }
+    // CASTLE AGE
+    else if (era === 1) {
+        const stone = '#475569';
+        const stoneDark = '#1e293b';
+        const blue = '#1d4ed8';
+        
+        switch(type) {
+            case TowerType.BASIC: // Archer Tower
+                return (
+                    <g>
+                        <rect x="10" y="10" width="20" height="20" fill={stone} stroke={stoneDark} strokeWidth="2" />
+                        <circle cx="20" cy="20" r="7" fill={blue} stroke="#fff" strokeWidth="1" />
+                        <path d="M24 20 Q 28 20, 24 24" stroke="#fff" strokeWidth="2" fill="none" />
+                    </g>
+                );
+            case TowerType.RAPID: // Crossbow
+                return (
+                    <g>
+                        <circle cx="20" cy="20" r="14" fill={stoneDark} />
+                        <path d="M12 20 L28 20 M16 16 L16 24" stroke="#94a3b8" strokeWidth="3" />
+                        <path d="M16 14 Q 28 20 16 26" stroke="#78350f" strokeWidth="2" fill="none" />
+                    </g>
+                );
+            case TowerType.SNIPER: // Ballista
+                return (
+                    <g>
+                        <rect x="12" y="8" width="16" height="24" fill="#78350f" rx="2" />
+                        <path d="M10 12 L30 12" stroke="#cbd5e1" strokeWidth="3" />
+                        <line x1="20" y1="12" x2="20" y2="30" stroke="#000" strokeWidth="1" />
+                    </g>
+                );
+            case TowerType.AOE: // Catapult
+                return (
+                    <g>
+                        <rect x="10" y="12" width="20" height="16" fill="#57534e" />
+                        <rect x="18" y="10" width="4" height="20" fill="#78350f" />
+                        <circle cx="20" cy="26" r="5" fill="#000" />
+                    </g>
+                );
+            default: return <rect x="12" y="12" width="16" height="16" fill={stone} />;
+        }
+    }
+    // IMPERIAL AGE
+    else {
+        const metal = '#374151';
+        const darkMetal = '#111827';
+        const camo = '#3f6212';
+        
+        switch(type) {
+            case TowerType.BASIC: // Sentry
+                return (
+                    <g>
+                        <rect x="8" y="8" width="24" height="24" fill={darkMetal} rx="4" />
+                        <circle cx="20" cy="20" r="8" fill={metal} stroke="#000" strokeWidth="1" />
+                        <rect x="20" y="18" width="12" height="4" fill="#000" />
+                    </g>
+                );
+            case TowerType.RAPID: // Gatling
+                return (
+                    <g>
+                        <circle cx="20" cy="20" r="14" fill={darkMetal} />
+                        <rect x="20" y="16" width="10" height="2" fill="#fbbf24" />
+                        <rect x="20" y="19" width="10" height="2" fill="#fbbf24" />
+                        <rect x="20" y="22" width="10" height="2" fill="#fbbf24" />
+                    </g>
+                );
+            case TowerType.SNIPER: // Sniper Nest
+                return (
+                    <g>
+                        <circle cx="20" cy="20" r="14" fill={camo} stroke="#000" strokeWidth="1" />
+                        <line x1="20" y1="20" x2="36" y2="20" stroke="#000" strokeWidth="3" />
+                    </g>
+                );
+            case TowerType.AOE: // Mortar
+                return (
+                    <g>
+                        <circle cx="20" cy="20" r="14" fill="#166534" />
+                        <circle cx="20" cy="20" r="6" fill="#000" stroke="#4ade80" strokeWidth="1" />
+                    </g>
+                );
+            default: return <rect x="10" y="10" width="20" height="20" fill={metal} />;
+        }
+    }
   }
+
+  return (
+    <div className="w-full h-full p-1 drop-shadow-md">
+        <svg viewBox="0 0 40 40" fill="none" className="w-full h-full filter drop-shadow-sm">
+            <RenderTower />
+        </svg>
+    </div>
+  );
 };
 
 const MapPreviewSVG = ({ map, activeThemeId }: { map: MapDefinition, activeThemeId: string }) => {
     const theme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
-    const scaleX = 60 / CANVAS_WIDTH; // Adjusted for Portrait preview (60px wide)
-    const scaleY = 100 / CANVAS_HEIGHT; // Adjusted for Portrait preview (100px tall)
+    const scaleX = 60 / CANVAS_WIDTH;
+    const scaleY = 100 / CANVAS_HEIGHT;
     let pathData = `M ${map.waypoints[0].x * scaleX} ${map.waypoints[0].y * scaleY}`;
     for (let i = 1; i < map.waypoints.length; i++) {
         pathData += ` L ${map.waypoints[i].x * scaleX} ${map.waypoints[i].y * scaleY}`;
     }
     return (
         <svg width="60" height="100" viewBox="0 0 60 100" style={{ backgroundColor: theme.background }} className="rounded border border-white/20 shadow-inner">
-            <path d={pathData} stroke={theme.uiAccent} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={pathData} stroke={theme.pathInner} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 };
 
-const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower) => {
-  const config = TOWER_TYPES[tower.type];
-  const color = config.color;
+// --- CANVAS DRAWING HELPERS ---
+
+const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gameTime: number) => {
+  // We need to isolate the rotation for just the turret part, but the base should be static.
+  // The passed context is translated to (x,y) but NOT rotated yet.
   
-  // Note: Context is already translated to tower center and rotated
-  
-  switch (tower.type) {
-    case TowerType.BASIC: // Sentry
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-4, -14, 3, 10); // Left barrel
-      ctx.fillRect(1, -14, 3, 10);  // Right barrel
-      
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      // @ts-ignore
-      ctx.roundRect ? ctx.roundRect(-6, -6, 12, 12, 4) : ctx.fillRect(-6, -6, 12, 12); // Fallback
-      ctx.fill();
-      
-      ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
-      break;
-
-    case TowerType.RAPID: // Gatling
-      ctx.fillStyle = '#3f6212';
-      ctx.beginPath();
-      // @ts-ignore
-      ctx.roundRect ? ctx.roundRect(-8, -6, 16, 14, 2) : ctx.fillRect(-8, -6, 16, 14);
-      ctx.fill();
-      
-      ctx.fillStyle = '#a3e635';
-      ctx.fillRect(-2, -14, 4, 8); // Center
-      ctx.fillRect(-7, -12, 3, 6); // Left
-      ctx.fillRect(4, -12, 3, 6); // Right
-      
-      ctx.fillStyle = '#1e293b';
-      ctx.beginPath(); ctx.arc(-6, 2, 3, 0, Math.PI*2); ctx.fill();
-      break;
-
-    case TowerType.SNIPER: // Railgun
-      ctx.fillStyle = '#7c2d12';
-      ctx.fillRect(-3, -20, 6, 26);
-      
-      ctx.fillStyle = color;
-      ctx.fillRect(-4, -14, 8, 2);
-      ctx.fillRect(-4, -6, 8, 2);
-      ctx.fillRect(-4, 2, 8, 2);
-      
-      ctx.fillStyle = '#0ea5e9';
-      ctx.beginPath(); ctx.arc(0, 6, 5, 0, Math.PI*2); ctx.fill();
-      break;
-
-    case TowerType.AOE: // Howitzer
-      ctx.fillStyle = '#7f1d1d';
-      ctx.beginPath();
-      ctx.moveTo(-10, -8);
-      ctx.lineTo(10, -8);
-      ctx.lineTo(10, 8);
-      ctx.lineTo(-10, 8);
-      ctx.fill();
-      
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-6, -14, 12, 10);
-      
-      ctx.fillStyle = '#000';
-      ctx.fillRect(-2, -14, 4, 4);
-      break;
-
-    case TowerType.LASER: // Prism
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.moveTo(-8, -10); ctx.lineTo(0, -4); ctx.lineTo(-8, 2); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(8, -10); ctx.lineTo(0, -4); ctx.lineTo(8, 2); ctx.fill();
-      
-      ctx.fillStyle = color;
-      ctx.strokeStyle = 'white';
-      ctx.lineWidth = 0.5;
-      ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(6, 0); ctx.lineTo(0, 12); ctx.lineTo(-6, 0); ctx.closePath(); 
-      ctx.fill();
-      ctx.stroke();
-      break;
-
-    case TowerType.FROST: // Cryo
-      ctx.fillStyle = '#e0f2fe';
-      ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
-      
-      ctx.fillStyle = '#0ea5e9';
-      ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(3, -14); ctx.lineTo(-3, -14); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(9, 5); ctx.lineTo(13, 8); ctx.lineTo(8, 10); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-9, 5); ctx.lineTo(-13, 8); ctx.lineTo(-8, 10); ctx.fill();
-      
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
-      break;
-
-    case TowerType.SHOCK: // Tesla
-      ctx.fillStyle = '#854d0e';
-      ctx.fillRect(-6, -6, 12, 12);
-      
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([2, 2]);
-      ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.stroke();
-      ctx.setLineDash([]);
-      
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
-      break;
-
-    case TowerType.MISSILE: // Swarm
-      ctx.fillStyle = '#581c87';
-      ctx.beginPath();
-      // @ts-ignore
-      ctx.roundRect ? ctx.roundRect(-10, -10, 20, 20, 4) : ctx.fillRect(-10, -10, 20, 20);
-      ctx.fill();
-      
-      const drawMissile = (x: number, y: number) => {
-        ctx.fillStyle = '#000';
-        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = color;
-        ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI*2); ctx.fill();
-      };
-      drawMissile(-5, -5);
-      drawMissile(5, -5);
-      drawMissile(-5, 5);
-      drawMissile(5, 5);
-      break;
-      
-    default:
-      ctx.fillStyle = '#64748b';
-      ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+  // 1. DRAW BASE (Static)
+  if (era === 0) { // Stone Age Base
+      ctx.fillStyle = '#57534e'; // Stone Gray
+      ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#451a03'; // Wood Dark
+      ctx.fillRect(-12, -12, 24, 24);
+      ctx.strokeStyle = '#292524'; ctx.lineWidth = 1; ctx.strokeRect(-12, -12, 24, 24);
+  } else if (era === 1) { // Castle Age Base
+      ctx.fillStyle = '#334155'; // Dark Slate
+      ctx.fillRect(-14, -14, 28, 28);
+      // Bricks pattern
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(14, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(0, 14); ctx.stroke();
+  } else { // Imperial Age Base
+      ctx.fillStyle = '#111827'; // Black/Dark Metal
+      ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#374151'; ctx.lineWidth = 2; ctx.stroke();
+      // Hazard stripes hint
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(-10, -18, 20, 2); ctx.fillRect(-10, 16, 20, 2);
   }
+
+  // 2. RECOIL CALCULATION
+  const timeSinceShot = gameTime - tower.lastShotFrame;
+  let recoil = 0;
+  if (timeSinceShot < 10) {
+      recoil = (10 - timeSinceShot) * 0.5; // Kick back pixels
+  }
+
+  // 3. DRAW TURRET (Rotated)
+  ctx.save();
+  ctx.rotate(tower.rotation);
+  ctx.translate(-recoil, 0); // Recoil moves opposite to facing (which is 0 rads in local space? No, facing is +X usually)
+  // Actually, rotation rotates the axes. Facing is usually 0 radians (Right).
+  // If tower.rotation points to enemy, then drawing rightwards implies shooting direction.
+  // So recoil should be negative X.
+
+  // --- ERA 0: STONE AGE ---
+  if (era === 0) {
+      if (tower.type === TowerType.BASIC) {
+          // Slinger: A guy standing there
+          ctx.fillStyle = '#fcd34d'; // Skin
+          ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill(); // Head
+          ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+          // Hands holding sling
+          ctx.fillStyle = '#78350f'; 
+          ctx.beginPath(); ctx.arc(8, 4, 3, 0, Math.PI*2); ctx.fill(); 
+          ctx.beginPath(); ctx.arc(8, -4, 3, 0, Math.PI*2); ctx.fill();
+      } else if (tower.type === TowerType.RAPID) {
+          // Thrower: 3 guys? or pile of rocks
+          ctx.fillStyle = '#a8a29e'; // Rocks
+          ctx.beginPath(); ctx.arc(-5, -5, 4, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(-5, 5, 4, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(5, 0, 4, 0, Math.PI*2); ctx.fill();
+          // Guy
+          ctx.fillStyle = '#fcd34d'; 
+          ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
+      } else if (tower.type === TowerType.SNIPER) {
+          // Spearman
+          ctx.fillStyle = '#fcd34d';
+          ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
+          // Long Spear
+          ctx.strokeStyle = '#451a03'; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(24, 0); ctx.stroke();
+          ctx.fillStyle = '#9ca3af'; // Tip
+          ctx.beginPath(); ctx.moveTo(24, 0); ctx.lineTo(28, -1); ctx.lineTo(28, 1); ctx.fill();
+      } else {
+          // Default/AoE
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(-8, -8, 16, 16);
+      }
+  } 
+  // --- ERA 1: CASTLE AGE ---
+  else if (era === 1) {
+      if (tower.type === TowerType.BASIC) {
+          // Archer
+          ctx.fillStyle = '#1e3a8a'; // Blue hood
+          ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
+          ctx.strokeStyle = '#fff'; ctx.lineWidth=1; ctx.stroke();
+          // Bow
+          ctx.strokeStyle = '#a16207'; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.arc(4, 0, 10, 0.7*Math.PI, 1.3*Math.PI); ctx.stroke();
+      } else if (tower.type === TowerType.RAPID) {
+          // Crossbow
+          ctx.fillStyle = '#57534e'; // Wood stand
+          ctx.fillRect(-6, -6, 12, 12);
+          ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(0, 10); ctx.stroke(); // Bow part
+          ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.stroke(); // Stock
+      } else if (tower.type === TowerType.AOE) {
+          // Catapult
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(-10, -8, 20, 16);
+          ctx.fillStyle = '#000'; // Bucket
+          ctx.beginPath(); ctx.arc(5, 0, 6, 0, Math.PI*2); ctx.fill();
+      } else {
+          // Magic/Other
+          ctx.fillStyle = '#1e40af';
+          ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(10, 0); ctx.lineTo(-5, 5); ctx.fill();
+      }
+  }
+  // --- ERA 2: IMPERIAL AGE ---
+  else {
+      // Modern Turrets
+      ctx.shadowBlur = 0;
+      if (tower.type === TowerType.BASIC) {
+          // Sentry
+          ctx.fillStyle = '#4b5563'; // Gun Metal
+          ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000'; // Barrel
+          ctx.fillRect(8, -3, 14, 6);
+      } else if (tower.type === TowerType.RAPID) {
+          // Gatling
+          ctx.fillStyle = '#374151';
+          ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#fbbf24'; // Gold barrels
+          ctx.fillRect(8, -6, 12, 3); ctx.fillRect(8, -1, 14, 3); ctx.fillRect(8, 4, 12, 3);
+      } else if (tower.type === TowerType.AOE) {
+          // Mortar
+          ctx.fillStyle = '#15803d';
+          ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
+      } else if (tower.type === TowerType.SNIPER) {
+          // Sniper Camo
+          ctx.fillStyle = '#3f6212';
+          ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(12, 0); ctx.lineTo(-8, 8); ctx.fill();
+          ctx.strokeStyle = '#000'; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(24,0); ctx.stroke();
+      } else {
+          // Generic
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(-5, -5, 10, 10);
+      }
+  }
+  ctx.restore();
+
+  // 4. LEVEL INDICATOR
+  if (tower.level > 1) {
+      ctx.fillStyle = era === 2 ? '#fbbf24' : '#fff';
+      for(let i=0; i<tower.level; i++) {
+          ctx.beginPath();
+          ctx.arc(-8 + (i*8), -12, 2, 0, Math.PI*2);
+          ctx.fill();
+      }
+  }
+};
+
+const drawEnemySprite = (ctx: CanvasRenderingContext2D, enemy: Enemy, era: number, gameTime: number) => {
+    // NOTE: Context is already translated, rotated, and optionally FLIPPED (scaled).
+    // Just draw the body. Shadows and HP bars are drawn in Screen Space in the main loop to avoid artifacts.
+    
+    // Animation bob
+    const bob = Math.sin(gameTime * 0.5) * 2;
+
+    // ENEMY BODY
+    // ERA 0: STONE AGE
+    if (era === 0) {
+        if (enemy.type === EnemyType.TANK) {
+            // MAMMOTH - Rounder body to prevent squashed look during rotation
+            ctx.fillStyle = '#57534e'; // Fur
+            ctx.beginPath(); ctx.ellipse(0, 0, 14, 13, 0, 0, Math.PI*2); ctx.fill(); // Almost circle body
+            ctx.fillStyle = '#78350f'; // Head
+            ctx.beginPath(); ctx.arc(10, 0, 7, 0, Math.PI*2); ctx.fill();
+            // Tusks
+            ctx.strokeStyle = '#e5e5e5'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(12, 3); ctx.quadraticCurveTo(18, 6, 18, -2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12, -3); ctx.quadraticCurveTo(18, -6, 18, 2); ctx.stroke();
+        } else if (enemy.type === EnemyType.FAST) {
+            // RAPTOR - Taller body to avoid thin line look
+            ctx.fillStyle = '#65a30d'; 
+            ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.lineTo(-6, -8); ctx.fill(); // Taller tail/back
+            ctx.beginPath(); ctx.arc(8, 0, 4, 0, Math.PI*2); ctx.fill(); // Head
+            // Legs moving
+            ctx.strokeStyle = '#4d7c0f'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, 6 + bob); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-4, 2); ctx.lineTo(-4, 6 - bob); ctx.stroke();
+        } else {
+            // CAVE MAN
+            ctx.fillStyle = '#fcd34d'; // Skin
+            ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
+            // Shoulders - Rounder
+            ctx.fillStyle = '#78350f'; // Fur
+            ctx.beginPath(); ctx.ellipse(-2, 0, 8, 7, 0, 0, Math.PI*2); ctx.fill();
+            // Club
+            ctx.strokeStyle = '#5c2b08'; ctx.lineWidth=3;
+            ctx.beginPath(); ctx.moveTo(2, 4); ctx.lineTo(10 + bob, 8); ctx.stroke();
+        }
+    }
+    // ERA 1: CASTLE AGE
+    else if (era === 1) {
+        if (enemy.type === EnemyType.TANK) {
+            // BATTERING RAM
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(-14, -10, 28, 20); // Taller
+            ctx.fillStyle = '#92400e'; 
+            ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(14, 0); ctx.stroke();
+            // Ram head
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(14, 0, 6, 0, Math.PI*2); ctx.fill();
+        } else if (enemy.type === EnemyType.FAST) {
+            // HORSE - Rounder
+            ctx.fillStyle = '#713f12'; 
+            ctx.beginPath(); ctx.ellipse(0, 0, 12, 10, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(10, 0, 5, 0, Math.PI*2); ctx.fill(); 
+        } else {
+            // KNIGHT
+            ctx.fillStyle = '#94a3b8'; // Armor
+            ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
+            // Shield
+            ctx.fillStyle = '#1d4ed8'; 
+            ctx.fillRect(-2, -7, 6, 14);
+        }
+    }
+    // ERA 2: IMPERIAL AGE
+    else {
+        if (enemy.type === EnemyType.TANK) {
+            // TANK
+            ctx.fillStyle = '#166534'; // Green
+            ctx.fillRect(-14, -12, 28, 24); // Fatter
+            ctx.fillStyle = '#064e3b'; // Turret
+            ctx.beginPath(); ctx.arc(-2, 0, 9, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#000'; // Barrel
+            ctx.fillRect(0, -2, 18, 4);
+        } else if (enemy.type === EnemyType.FAST) {
+            // BUGGY
+            ctx.fillStyle = '#d97706';
+            ctx.fillRect(-8, -8, 16, 16); // Square-ish
+            ctx.fillStyle = '#000'; // Wheels
+            ctx.fillRect(-6, -8, 4, 2); ctx.fillRect(4, -8, 4, 2);
+            ctx.fillRect(-6, 6, 4, 2); ctx.fillRect(4, 6, 4, 2);
+        } else {
+            // SOLDIER
+            ctx.fillStyle = '#3f6212';
+            ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#111827'; // Helmet
+            ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
+            // Gun
+            ctx.strokeStyle = '#000'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(2, 2); ctx.lineTo(10, 2); ctx.stroke();
+        }
+    }
+};
+
+const drawProjectile = (ctx: CanvasRenderingContext2D, proj: Projectile, era: number) => {
+    ctx.save();
+    ctx.translate(proj.position.x, proj.position.y);
+    const angle = Math.atan2(proj.velocity.y, proj.velocity.x);
+    ctx.rotate(angle);
+
+    if (era === 0) {
+        // Rock / Spear
+        if (proj.type === 'AOE') {
+            ctx.fillStyle = '#57534e';
+            ctx.beginPath(); 
+            // Rough rock shape
+            ctx.moveTo(-4, -2); ctx.lineTo(2, -4); ctx.lineTo(4, 2); ctx.lineTo(-2, 4); 
+            ctx.fill();
+        } else {
+            // Stone
+            ctx.fillStyle = '#a8a29e';
+            ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+        }
+    } else if (era === 1) {
+        // Arrow
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(-6, -1, 12, 2); // Shaft
+        ctx.fillStyle = '#cbd5e1'; 
+        ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(9, 0); ctx.lineTo(6, 2); ctx.fill(); // Tip
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-9, 0); ctx.lineTo(-6, 2); ctx.fill(); // Feathers
+    } else {
+        // Bullet / Rocket
+        if (proj.type === 'AOE') {
+            ctx.fillStyle = '#1f2937';
+            ctx.fillRect(-6, -2, 12, 4);
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(10, 0); ctx.lineTo(6, 2); ctx.fill();
+            // Flame trail
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath(); ctx.arc(-6, 0, 2 + Math.random()*2, 0, Math.PI*2); ctx.fill();
+        } else {
+            // Tracer
+            ctx.fillStyle = '#fcd34d';
+            ctx.fillRect(-4, -1, 8, 2);
+        }
+    }
+    ctx.restore();
 };
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
@@ -297,25 +513,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const mousePosRef = useRef<Vector2D | null>(null);
   const isPointerDownRef = useRef<boolean>(false);
   
-  // Timing Refs for Fixed Timestep
   const lastFrameTimeRef = useRef<number>(0);
   const accumulatorRef = useRef<number>(0);
 
-  // Theme State
   const [unlockedThemes, setUnlockedThemes] = useState<string[]>(['default']);
   const [activeThemeId, setActiveThemeId] = useState<string>('default');
   
-  // Ref for background elements
-  const terrainRef = useRef<{
-      craters: {x: number, y: number, r: number}[], 
-      stars: {x: number, y: number, size: number, alpha: number, speed: number}[],
-      scanline: number
-  }>({ craters: [], stars: [], scanline: 0 });
+  // Scenery (Trees, Rocks) - Add more variety
+  const sceneryRef = useRef<{x: number, y: number, r: number, type: 'tree' | 'rock' | 'bush' | 'grass'}[]>([]);
 
   const gameStateRef = useRef<GameState>({
-    money: 120,
-    lives: 20,
-    wave: 1,
+    ...INITIAL_STATE,
     isPlaying: false,
     isGameOver: false,
     gameTime: 0,
@@ -329,15 +537,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const particlesRef = useRef<Particle[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   
-  // NEW: Perks refs
   const perkDropsRef = useRef<PerkDrop[]>([]);
-  
-  // Separate Ref for Game Logic (Loop) avoiding dependency cycles
   const activePerksRef = useRef<ActivePerk[]>([]);
-  // State for UI Rendering
   const [activePerks, setActivePerks] = useState<ActivePerk[]>([]);
   
-  // INVENTORY SYSTEM
   const [perkInventory, setPerkInventory] = useState<Record<PerkType, number>>({
       [PerkType.DAMAGE]: 0,
       [PerkType.SPEED]: 0,
@@ -348,10 +551,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
   const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{title: string, subtitle?: string, color: string, type: 'info' | 'boss'} | null>(null);
+  const [notification, setNotification] = useState<{title: string, subtitle?: string, color: string, type: 'info' | 'boss' | 'evolve'} | null>(null);
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   
-  // FIX: Use useRef for spawnQueue to avoid stale state in game loop
   const spawnQueueRef = useRef<{ type: EnemyType; delay: number }[]>([]);
   
   const [userName, setUserName] = useState<string>("");
@@ -360,47 +562,27 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const distance = (a: Vector2D, b: Vector2D) => Math.hypot(a.x - b.x, a.y - b.y);
   
-  // LOCK CANVAS SCROLLING
+  // Initialize Scenery
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const preventDefault = (e: TouchEvent) => {
-        if (e.cancelable) e.preventDefault();
-    };
-    canvas.addEventListener('touchmove', preventDefault, { passive: false });
-    canvas.addEventListener('touchstart', preventDefault, { passive: false });
-    canvas.addEventListener('touchend', preventDefault, { passive: false });
-    return () => {
-        canvas.removeEventListener('touchmove', preventDefault);
-        canvas.removeEventListener('touchstart', preventDefault);
-        canvas.removeEventListener('touchend', preventDefault);
-    };
-  }, []);
+    if (sceneryRef.current.length === 0) {
+        for (let i = 0; i < 60; i++) {
+            const r = Math.random();
+            let type: 'tree' | 'rock' | 'bush' | 'grass' = 'grass';
+            if (r > 0.9) type = 'rock';
+            else if (r > 0.7) type = 'tree';
+            else if (r > 0.5) type = 'bush';
 
-  // Initialize terrain and starfield
-  useEffect(() => {
-    if (terrainRef.current.craters.length === 0) {
-        // Craters
-        for (let i = 0; i < 30; i++) {
-            terrainRef.current.craters.push({
+            sceneryRef.current.push({
                 x: Math.random() * CANVAS_WIDTH,
                 y: Math.random() * CANVAS_HEIGHT,
-                r: Math.random() * 30 + 5
-            });
-        }
-        // Stars
-        for (let i = 0; i < 150; i++) {
-            terrainRef.current.stars.push({
-                x: Math.random() * CANVAS_WIDTH,
-                y: Math.random() * CANVAS_HEIGHT,
-                size: Math.random() * 1.5 + 0.5,
-                alpha: Math.random(),
-                speed: Math.random() * 0.2 + 0.05
+                r: Math.random() * 10 + 5,
+                type: type
             });
         }
     }
   }, []);
 
+  // Audio & Haptic Helper
   const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'error' | 'success' | 'selection') => {
     if (window.Telegram?.WebApp?.HapticFeedback) {
       if (type === 'error' || type === 'success') {
@@ -424,7 +606,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     });
   };
 
-  const spawnParticle = (pos: Vector2D, color: string, count: number = 5, type: 'circle' | 'ring' = 'circle') => {
+  const spawnParticle = (pos: Vector2D, color: string, count: number = 5, type: 'circle' | 'ring' | 'debris' = 'circle') => {
     if (type === 'ring') {
          particlesRef.current.push({
             id: Math.random().toString(36),
@@ -433,7 +615,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             life: 1.0,
             maxLife: 1.0,
             color: color,
-            size: 1, // Start small
+            size: 1, 
             type: 'ring'
         });
         return;
@@ -441,7 +623,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 3 + 1; // Faster particles
+      const speed = Math.random() * 3 + 1; 
       particlesRef.current.push({
         id: Math.random().toString(36),
         position: { ...pos },
@@ -450,16 +632,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         maxLife: 1.0,
         color: color,
         size: Math.random() * 3 + 1,
-        type: 'circle'
+        type: type
       });
     }
   };
 
-  // Helper to spawn perks on death
   const handleEnemyDeath = (enemy: Enemy) => {
-      // 5% Chance for normal enemies, 100% for Bosses
-      const chance = enemy.type === EnemyType.BOSS ? 1.0 : 0.05;
+      const state = gameStateRef.current;
       
+      // Grant EXP
+      state.exp += enemy.expReward;
+      if (state.exp > state.maxExp && state.era < 2) {
+          state.exp = state.maxExp; // Cap it until evolution
+      }
+
+      // Drop Chance
+      const chance = enemy.type === EnemyType.BOSS ? 1.0 : 0.05;
       if (Math.random() < chance) {
           const types = [PerkType.DAMAGE, PerkType.SPEED, PerkType.MONEY, PerkType.FREEZE];
           const randType = types[Math.floor(Math.random() * types.length)];
@@ -468,69 +656,81 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
               id: Math.random().toString(),
               position: { ...enemy.position },
               type: randType,
-              life: 300, // 5 seconds to pick up
+              life: 300, 
               maxLife: 300
           });
-          audioService.playBuild(); // Use build sound as a "drop" sound for now
+          audioService.playBuild(); 
+      }
+  };
+
+  const evolveEra = () => {
+      const state = gameStateRef.current;
+      if (state.era < 2 && state.exp >= state.maxExp) {
+          state.era++;
+          state.exp = 0;
+          state.maxExp = ERA_DATA[state.era].maxExp;
+          // Heal lives a bit
+          state.lives += 5;
+          
+          triggerHaptic('success');
+          audioService.playWaveStart(); // Fanfare
+          setNotification({
+              title: "AGE ADVANCED",
+              subtitle: `WELCOME TO THE ${ERA_DATA[state.era].name}`,
+              color: "text-yellow-400",
+              type: 'evolve'
+          });
+          setTimeout(() => setNotification(null), 4000);
+          
+          setUiState({...state});
       }
   };
 
   const activatePerk = (type: PerkType) => {
     if (perkInventory[type] <= 0) return;
 
-    // Decrement inventory
     setPerkInventory(prev => ({
         ...prev,
         [type]: Math.max(0, prev[type] - 1)
     }));
 
-    // Apply Immediate Effect
     if (type === PerkType.MONEY) {
-        gameStateRef.current.money += 200; // Bonus cash for active use
+        gameStateRef.current.money += 200; 
         spawnFloatingText({x: CANVAS_WIDTH/2, y: CANVAS_HEIGHT/2}, "+$200", "#22c55e");
         audioService.playBuild(); 
     } else if (type === PerkType.FREEZE) {
-        enemiesRef.current.forEach(e => e.frozen = 240); // 4 seconds
-        // Full screen freeze effect particles
+        enemiesRef.current.forEach(e => e.frozen = 240); 
         for(let i=0; i<5; i++) {
             spawnParticle({
                 x: Math.random() * CANVAS_WIDTH, 
                 y: Math.random() * CANVAS_HEIGHT
             }, '#06b6d4', 5, 'ring');
         }
-        audioService.playShoot('LASER');
+        audioService.playShoot('LASER', 2);
     } else {
-        // Apply Buff (Damage/Speed)
         const duration = PERK_STATS[type].duration;
         const newPerk: ActivePerk = {
             type: type,
             endTime: gameStateRef.current.gameTime + duration,
             duration: duration
         };
-        
-        // Update Ref for Game Logic (remove old same type to "refresh" duration)
         const filtered = activePerksRef.current.filter(p => p.type !== type);
         activePerksRef.current = [...filtered, newPerk];
-        
-        // Update State for UI
         setActivePerks([...activePerksRef.current]);
-        
         audioService.playAlarm(); 
     }
-    
     triggerHaptic('success');
   };
 
   const startWave = useCallback((waveNum: number) => {
-    // UPDATED: Bosses appear every 5 rounds
     const isBossWave = waveNum > 0 && waveNum % 5 === 0;
     
     if (isBossWave) {
          audioService.playAlarm();
          triggerHaptic('heavy');
          setNotification({
-             title: "BOSS DETECTED",
-             subtitle: "CLASS-5 LEVIATHAN INBOUND",
+             title: "BOSS INCOMING",
+             subtitle: "DEFEND THE VILLAGE",
              color: "text-red-500",
              type: 'boss'
          });
@@ -544,30 +744,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     
     for (let i = 0; i < count; i++) {
       let type = EnemyType.NORMAL;
-      // FIX: Default Interval is 30 frames (0.5s), not "i * 60"
       let interval = 30; 
 
       if (waveNum > 2 && i % 3 === 0) {
           type = EnemyType.FAST;
-          interval = 15; // Fast swarm: 0.25s
+          interval = 15; 
       }
       if (waveNum > 4 && i % 6 === 0) {
           type = EnemyType.TANK;
-          interval = 60; // Tank: 1.0s gap after
+          interval = 60; 
       }
-      
-      // Boss Logic
       if (isBossWave && i === count - 1) {
           type = EnemyType.BOSS;
-          interval = 120; // Big gap before boss
+          interval = 120;
       }
-
-      // First enemy comes immediately
       if (i === 0) interval = 0;
-      
       newQueue.push({ type, delay: interval });
     }
-    // Set synchronous ref
     spawnQueueRef.current = newQueue;
   }, []);
 
@@ -584,7 +777,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
   const initializeGame = useCallback(() => {
       setHasStartedGame(true);
-      // Start with 10 seconds (600 frames) countdown for the first wave
       gameStateRef.current.autoStartTimer = 600;
       gameStateRef.current.isPlaying = false; 
       setUiState(prev => ({ ...prev, autoStartTimer: 600 }));
@@ -594,12 +786,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
-    setUserName(tg.initDataUnsafe?.user?.first_name || "Commander");
+    setUserName(tg.initDataUnsafe?.user?.first_name || "Chief");
     const mainBtn = tg.MainButton;
     
     const updateMainButton = () => {
       if (uiState.isGameOver) {
-        mainBtn.setText("RESTART MISSION");
+        mainBtn.setText("TRY AGAIN");
         mainBtn.color = "#ef4444";
         mainBtn.show();
       } else {
@@ -627,21 +819,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
     for (let loop = 0; loop < loops; loop++) {
         state.gameTime++;
-        // Animate Scanline
-        terrainRef.current.scanline = (terrainRef.current.scanline + 2) % CANVAS_HEIGHT;
-
-        // --- UPDATE ACTIVE PERKS (Using Ref for Stability) ---
+        
         const now = state.gameTime;
         const previousLength = activePerksRef.current.length;
-        // Filter expired
         activePerksRef.current = activePerksRef.current.filter(p => now < p.endTime);
-        
-        // Sync State if changes occurred (Optimization: Only sync on change)
         if (activePerksRef.current.length !== previousLength) {
              setActivePerks([...activePerksRef.current]);
         }
 
-        // --- UPDATE PERK DROPS (Disappearing) ---
+        // Perk Drops
         for (let i = perkDropsRef.current.length - 1; i >= 0; i--) {
             perkDropsRef.current[i].life--;
             if (perkDropsRef.current[i].life <= 0) {
@@ -649,19 +835,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             }
         }
 
-        // --- VISUAL FX UPDATE LOOP (Runs even if !isPlaying) ---
-        
-        // Update Projectiles (Finish flying even if wave ended)
+        // Projectiles
         for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
           const p = projectilesRef.current[i];
           const target = enemiesRef.current.find(e => e.id === p.targetId);
           
           if (!target) {
-            // Projectile continues straight if target lost
             p.position.x += p.velocity.x;
             p.position.y += p.velocity.y;
-            
-            // Remove if out of bounds
             if (p.position.x < 0 || p.position.x > CANVAS_WIDTH || p.position.y < 0 || p.position.y > CANVAS_HEIGHT) {
                 projectilesRef.current.splice(i, 1);
             }
@@ -671,7 +852,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           const angle = Math.atan2(target.position.y - p.position.y, target.position.x - p.position.x);
           p.velocity.x = Math.cos(angle) * p.speed;
           p.velocity.y = Math.sin(angle) * p.speed;
-          
           p.position.x += p.velocity.x;
           p.position.y += p.velocity.y;
 
@@ -679,8 +859,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           if (dist <= p.speed) {
             if (p.type === 'AOE' && p.blastRadius) {
                if (loop === 0) audioService.playExplosion();
-               spawnParticle(p.position, '#f97316', 1, 'ring');
-               spawnParticle(p.position, '#f97316', 10, 'circle');
+               spawnParticle(p.position, '#ca8a04', 1, 'ring'); // Dirt ring
+               spawnParticle(p.position, '#a8a29e', 8, 'debris'); // Rocks
                enemiesRef.current.forEach(e => {
                  if (distance(e.position, p.position) <= p.blastRadius!) {
                      e.hp -= p.damage;
@@ -699,22 +879,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           }
         }
 
-        // Update Particles
+        // Particles
         for (let i = particlesRef.current.length - 1; i >= 0; i--) {
           const p = particlesRef.current[i];
           p.life -= 0.05;
-          
           if (p.type === 'ring') {
               p.size += 2; 
           } else {
               p.position.x += p.velocity.x;
               p.position.y += p.velocity.y;
           }
-          
           if (p.life <= 0) particlesRef.current.splice(i, 1);
         }
 
-        // Update Floating Text
+        // Floating Text
         for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
            const ft = floatingTextsRef.current[i];
            ft.life -= 0.02;
@@ -723,68 +901,66 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
            if (ft.life <= 0) floatingTextsRef.current.splice(i, 1);
         }
 
-        // --- GAME LOGIC (Wait State) ---
+        // Auto Start Logic
         if (!state.isPlaying) {
              if (state.autoStartTimer > 0) {
-                // Play tick sound for last 3 seconds (180, 120, 60 frames approx)
-                if (state.autoStartTimer === 180 || state.autoStartTimer === 120 || state.autoStartTimer === 60) {
-                    audioService.playTick();
-                }
-
+                if ([180, 120, 60].includes(state.autoStartTimer)) audioService.playTick();
                 state.autoStartTimer--;
                 if (state.autoStartTimer === 0) handleStartWave();
                 if (state.autoStartTimer % 60 === 0 && loop === 0) setUiState({ ...state });
              }
-             continue; // Skip enemy/tower logic if waiting
+             continue; 
         }
 
-        // --- COMBAT LOGIC (Spawn, Move, Shoot) ---
+        // Spawn
         const queue = spawnQueueRef.current;
         if (queue.length > 0) {
           if (queue[0].delay <= 0) {
             const nextEnemy = queue.shift();
             if (nextEnemy) {
               const stats = ENEMY_STATS[nextEnemy.type];
-              // INCREASED DIFFICULTY SCALING: 35% HP increase per wave instead of 20%
-              const waveMultiplier = state.wave * 0.35;
+              // Era Difficulty Scaling + Wave Scaling
+              const eraMult = 1 + (state.era * 0.5);
+              const waveMult = 1 + (state.wave * 0.2);
+              
               enemiesRef.current.push({
                 id: Math.random().toString(36),
-                position: { ...currentMap.waypoints[0] }, // Spawn at current map start
+                position: { ...currentMap.waypoints[0] }, 
                 type: nextEnemy.type,
-                hp: stats.maxHp + (stats.maxHp * waveMultiplier),
-                maxHp: stats.maxHp + (stats.maxHp * waveMultiplier),
+                hp: stats.maxHp * eraMult * waveMult,
+                maxHp: stats.maxHp * eraMult * waveMult,
                 speed: stats.speed,
                 pathIndex: 0,
                 distanceTraveled: 0,
                 frozen: 0,
                 moneyReward: stats.reward,
+                expReward: stats.expReward,
                 color: stats.color,
                 radius: stats.radius
               });
             }
-            // No need to set state, we modified ref directly
           } else {
             queue[0].delay--;
           }
         } else if (enemiesRef.current.length === 0 && state.lives > 0) {
-           // WAVE CLEAR LOGIC
-           // Only trigger if queue is really empty (ref check handles this immediately)
+           // WAVE CLEAR
            state.isPlaying = false;
            state.wave++;
            state.money += 50 + (state.wave * 10);
            state.autoStartTimer = AUTO_START_DELAY; 
            triggerHaptic('success');
            setUiState(prev => ({ ...prev, isPlaying: false, wave: state.wave, money: state.money, autoStartTimer: state.autoStartTimer }));
-           // Don't break loop here, just continue to next iteration where !isPlaying catches it
            continue; 
         }
 
+        // Enemies Move
         for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
           const enemy = enemiesRef.current[i];
           const target = currentMap.waypoints[enemy.pathIndex + 1]; 
           if (!target) {
             state.lives--;
             triggerHaptic('error');
+            audioService.playDamage(); // Enable damage sound
             enemiesRef.current.splice(i, 1);
             if (state.lives <= 0) {
               state.isGameOver = true;
@@ -807,6 +983,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           }
         }
 
+        // Towers Shoot
         towersRef.current.forEach(tower => {
           let target: Enemy | null = null;
           let maxDist = -1;
@@ -825,23 +1002,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
               tower.rotation = Math.atan2(target.position.y - tower.position.y, target.position.x - tower.position.x);
           }
 
-          // PERK MODIFIERS - USE REF
           const isRapid = activePerksRef.current.some(p => p.type === PerkType.SPEED);
           const activeCooldown = isRapid ? tower.cooldown / 2 : tower.cooldown;
 
           if (tower.lastShotFrame + activeCooldown <= state.gameTime) {
             if (target) {
               tower.lastShotFrame = state.gameTime;
-              
-              // PERK DAMAGE MODIFIER - USE REF
               const isDoubleDmg = activePerksRef.current.some(p => p.type === PerkType.DAMAGE);
-              const activeDmg = isDoubleDmg ? tower.damage * 2 : tower.damage;
+              const eraDmgMult = 1 + (state.era * 0.8);
+              const activeDmg = (isDoubleDmg ? tower.damage * 2 : tower.damage) * eraDmgMult;
 
               let pType: 'SINGLE' | 'AOE' = 'SINGLE';
               let blast = 0;
               let effect: 'FREEZE' | 'SHOCK' | undefined = undefined;
-              let speed = 12; // Faster projectiles
-              let color = TOWER_TYPES[tower.type].color;
+              let speed = 12; 
+              let color = '#000';
               let soundType: 'LASER' | 'HEAVY' | 'NORMAL' = 'NORMAL';
 
               if (tower.type === TowerType.AOE) { pType = 'AOE'; blast = 60 + (tower.level * 10); soundType = 'HEAVY'; speed = 8; }
@@ -850,7 +1025,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
               if (tower.type === TowerType.FROST) { effect = 'FREEZE'; soundType = 'LASER'; }
               if (tower.type === TowerType.SHOCK) { effect = 'SHOCK'; soundType = 'LASER'; }
               
-              if (loop === 0) audioService.playShoot(soundType); 
+              if (loop === 0) audioService.playShoot(soundType, state.era); 
 
               const angle = Math.atan2(target.position.y - tower.position.y, target.position.x - tower.position.x);
 
@@ -866,22 +1041,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                 type: pType,
                 blastRadius: blast,
                 effect: effect,
-                velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }
+                velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+                visualType: 'ARROW' 
               });
             }
           }
         });
 
-        // Clean up dead enemies
+        // Dead Enemies
         for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
           if (enemiesRef.current[i].hp <= 0) {
             state.money += enemiesRef.current[i].moneyReward;
-            
-            // Drop Perk Logic
             if (loop === 0) handleEnemyDeath(enemiesRef.current[i]);
-
             spawnFloatingText(enemiesRef.current[i].position, `+$${enemiesRef.current[i].moneyReward}`, '#fbbf24');
-            spawnParticle(enemiesRef.current[i].position, '#fff', 1, 'ring'); // Death ring
+            spawnParticle(enemiesRef.current[i].position, '#fff', 1, 'ring'); 
             spawnParticle(enemiesRef.current[i].position, enemiesRef.current[i].color, 8, 'circle');
             enemiesRef.current.splice(i, 1);
           }
@@ -891,7 +1064,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     if (state.gameTime % 5 === 0) {
       setUiState({ ...state });
     }
-  }, [onGameOver, handleStartWave, currentMap]); // Removed activePerks from dependency
+  }, [onGameOver, handleStartWave, currentMap]); 
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -899,367 +1072,210 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Theme Config
     const theme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
 
-    // 1. Clear & Background
+    // Background (Terrain)
     ctx.fillStyle = theme.background;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // 2. Draw Starfield
-    ctx.fillStyle = "#ffffff";
-    terrainRef.current.stars.forEach(star => {
-        ctx.globalAlpha = Math.abs(Math.sin(gameStateRef.current.gameTime * star.speed * 0.05 + star.x));
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-        ctx.fill();
+    // Scenery (Trees/Rocks)
+    sceneryRef.current.forEach(item => {
+        if (item.type === 'tree') {
+            ctx.fillStyle = '#14532d'; // Dark Green
+            ctx.beginPath(); ctx.arc(item.x, item.y, item.r, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#166534'; // Lighter Green
+            ctx.beginPath(); ctx.arc(item.x - 2, item.y - 2, item.r * 0.7, 0, Math.PI*2); ctx.fill();
+        } else if (item.type === 'rock') {
+            ctx.fillStyle = '#57534e'; // Stone
+            ctx.beginPath(); ctx.arc(item.x, item.y, item.r * 0.6, 0, Math.PI*2); ctx.fill();
+        } else if (item.type === 'bush') {
+            ctx.fillStyle = '#3f6212';
+            ctx.beginPath(); ctx.arc(item.x, item.y, item.r * 0.5, 0, Math.PI*2); ctx.fill();
+        } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            ctx.fillRect(item.x, item.y, 2, 2);
+        }
     });
-    ctx.globalAlpha = 1.0;
 
-    // 3. Draw Grid
-    ctx.strokeStyle = theme.grid;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, CANVAS_HEIGHT);
-    }
-    for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
-    }
-    ctx.stroke();
-
-    // 4. Draw Path
+    // Path
     if (currentMap.waypoints.length > 0) {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = theme.pathGlow;
-        ctx.strokeStyle = theme.pathOuter;
-        ctx.lineWidth = 40;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
+        
+        // 1. Path Border (Darker/Wider) to define width clearly
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.strokeStyle = '#292524'; // Darker "kerb"
+        ctx.lineWidth = 48; // Wider than inner path
         ctx.beginPath();
         ctx.moveTo(currentMap.waypoints[0].x, currentMap.waypoints[0].y);
-        for (let i = 1; i < currentMap.waypoints.length; i++) {
-            ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
-        }
+        for (let i = 1; i < currentMap.waypoints.length; i++) { ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y); }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // 2. Inner Path (Dirt/Sand)
+        ctx.strokeStyle = theme.pathInner;
+        ctx.lineWidth = 40; // Consistent width
         ctx.stroke();
         
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = theme.pathInner;
-        ctx.lineWidth = 32;
-        ctx.stroke();
-
-        ctx.strokeStyle = theme.uiAccent;
+        // 3. Optional: Path Texture (Dotted center line or stones)
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
         ctx.lineWidth = 2;
-        ctx.setLineDash([10, 10]);
-        ctx.globalAlpha = 0.3;
+        ctx.setLineDash([15, 15]); // Dashed line in center for detail
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.globalAlpha = 1.0;
+        
+        // Reset stroke style
+        ctx.strokeStyle = 'transparent';
+        ctx.setLineDash([]);
     }
 
-    // 5. Draw Perk Drops
+    // Drops
     perkDropsRef.current.forEach(perk => {
         const info = PERK_STATS[perk.type];
         const pulse = 1 + Math.sin(gameStateRef.current.gameTime * 0.1) * 0.2;
-        
         ctx.save();
         ctx.translate(perk.position.x, perk.position.y);
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = info.color;
+        ctx.shadowBlur = 10; ctx.shadowColor = info.color;
         ctx.fillStyle = info.color;
-        ctx.beginPath();
-        ctx.arc(0, 0, 12 * pulse, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowBlur = 0;
-        ctx.fillText(info.icon, 0, 0);
+        ctx.beginPath(); ctx.arc(0, 0, 12 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = '12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 0; ctx.fillText(info.icon, 0, 0);
         ctx.restore();
     });
 
-    // 6. Draw Towers
+    // Towers
     towersRef.current.forEach(tower => {
-        const config = TOWER_TYPES[tower.type];
         ctx.save();
         ctx.translate(tower.position.x, tower.position.y);
-        
-        // VISUAL PERK INDICATOR ON TOWER - USE REF
-        const hasDmgBuff = activePerksRef.current.some(p => p.type === PerkType.DAMAGE);
-        const hasSpeedBuff = activePerksRef.current.some(p => p.type === PerkType.SPEED);
-        
-        // Aura under tower if buffed
-        if (hasDmgBuff || hasSpeedBuff) {
-            ctx.save();
-            ctx.globalAlpha = 0.3 + Math.sin(gameStateRef.current.gameTime * 0.2) * 0.1;
-            ctx.fillStyle = hasDmgBuff ? '#ef4444' : '#eab308';
-            ctx.beginPath();
-            ctx.arc(0, 0, 25, 0, Math.PI*2);
-            ctx.fill();
-            ctx.restore();
-        }
-
-        // Base
-        ctx.fillStyle = '#1e293b'; 
-        ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.rotate(tower.rotation);
-        
-        // Draw sophisticated tower per type (reusing similar logic to icon but simplified for canvas)
-        drawTower(ctx, tower); // Using the helper function we already have!
-        
+        // DrawTower handles rotation internally for turret
+        drawTower(ctx, tower, gameStateRef.current.era, gameStateRef.current.gameTime);
         ctx.restore();
 
-        // Selection ring
+        // Selection
         if (selectedPlacedTowerId === tower.id) {
-            ctx.beginPath();
-            ctx.strokeStyle = '#fff';
-            ctx.setLineDash([4, 4]);
-            ctx.arc(tower.position.x, tower.position.y, tower.range, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.beginPath(); ctx.strokeStyle = '#fff'; ctx.setLineDash([4, 4]);
+            ctx.arc(tower.position.x, tower.position.y, tower.range, 0, Math.PI * 2); ctx.stroke();
             ctx.setLineDash([]);
-            ctx.strokeStyle = '#fbbf24';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(tower.position.x, tower.position.y, 20, 0, Math.PI * 2);
-            ctx.stroke();
         }
     });
 
-    // 7. Draw Enemies
+    // Enemies
     enemiesRef.current.forEach(enemy => {
+        // Find rotation based on next waypoint
         const target = currentMap.waypoints[enemy.pathIndex + 1];
-        let angle = 0;
+        let rotation = 0;
         if (target) {
-            angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
+            rotation = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
         }
 
+        // Draw Shadow in Screen Space to avoid artifacts
         ctx.save();
-        ctx.translate(enemy.position.x, enemy.position.y);
-        ctx.rotate(angle);
-
-        // Enemy Glow
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = enemy.color;
-        ctx.fillStyle = enemy.color;
-        
-        // --- COMPLEX DRAWING LOGIC ---
-        if (enemy.type === EnemyType.BOSS) {
-            // "THE LEVIATHAN" - Rotating Dreadnought
-            const spin = gameStateRef.current.gameTime * 0.05;
-            
-            // Outer Shield Ring
-            ctx.save();
-            ctx.rotate(spin);
-            ctx.strokeStyle = enemy.color;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            for(let k=0; k<6; k++) {
-                const a = (k * Math.PI * 2) / 6;
-                ctx.moveTo(Math.cos(a)*28, Math.sin(a)*28);
-                ctx.lineTo(Math.cos(a)*34, Math.sin(a)*34);
-            }
-            ctx.stroke();
-            ctx.beginPath(); ctx.arc(0,0, 28, 0, Math.PI*2); ctx.stroke();
-            ctx.restore();
-
-            // Inner Core
-            ctx.fillStyle = '#0f172a'; // Dark center
-            ctx.beginPath(); ctx.arc(0,0, 20, 0, Math.PI*2); ctx.fill();
-            
-            // Pulsing Reactor
-            ctx.fillStyle = enemy.color;
-            ctx.beginPath(); 
-            ctx.moveTo(-10, -10); ctx.lineTo(10, -10); ctx.lineTo(8, 10); ctx.lineTo(-8, 10);
-            ctx.fill();
-            ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fillStyle="#fff"; ctx.fill();
-
-        } else if (enemy.type === EnemyType.TANK) {
-            // "THE BEHEMOTH" - Heavy Armor Square
-            ctx.fillStyle = '#334155'; // Dark Slate Base
-            ctx.fillRect(-16, -16, 32, 32);
-            ctx.fillStyle = enemy.color;
-            // Armor Plates
-            ctx.fillRect(-14, -14, 10, 28); // Left track
-            ctx.fillRect(4, -14, 10, 28); // Right track
-            // Turret
-            ctx.fillStyle = '#0f172a';
-            ctx.beginPath(); ctx.arc(0,0, 8, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = enemy.color;
-            ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 0); ctx.stroke();
-
-        } else if (enemy.type === EnemyType.FAST) {
-            // "THE VIPER" - Fast Jet
-            ctx.beginPath();
-            ctx.moveTo(14, 0); // Nose
-            ctx.lineTo(-10, -10); // Left Wing
-            ctx.lineTo(-4, 0); // Center back
-            ctx.lineTo(-10, 10); // Right Wing
-            ctx.closePath();
-            ctx.fill();
-            // Engine Glow
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(-6, 0, 2, 0, Math.PI*2); ctx.fill();
-
-        } else {
-            // "THE SCARAB" - Normal Unit
-            ctx.beginPath();
-            ctx.moveTo(10, 0);
-            ctx.lineTo(-6, -8);
-            ctx.lineTo(-2, 0);
-            ctx.lineTo(-6, 8);
-            ctx.closePath();
-            ctx.fill();
-            // Eye
-            ctx.fillStyle = '#1e293b';
-            ctx.beginPath(); ctx.arc(2, 0, 3, 0, Math.PI*2); ctx.fill();
-        }
-
-        ctx.shadowBlur = 0;
+        ctx.translate(enemy.position.x, enemy.position.y + 4);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.ellipse(0, 0, enemy.radius, enemy.radius*0.6, 0, 0, Math.PI*2); ctx.fill();
         ctx.restore();
 
-        // --- HEALTH BARS ---
+        // Draw Enemy Body (Rotated and Flipped)
+        ctx.save();
+        ctx.translate(enemy.position.x, enemy.position.y);
+        ctx.rotate(rotation);
+        
+        // FLIP IF MOVING LEFT (Avoid upside down sprites)
+        // Check if rotation is in the left quadrants (>90 deg or <-90 deg)
+        if (Math.abs(rotation) > Math.PI / 2) {
+            ctx.scale(1, -1);
+        }
+
+        drawEnemySprite(ctx, enemy, gameStateRef.current.era, gameStateRef.current.gameTime);
+        ctx.restore();
+
+        // HP Bar (Screen Space, above enemy)
         const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
         if (hpPct < 1) {
             ctx.save();
-            ctx.translate(enemy.position.x, enemy.position.y);
-            const barY = enemy.type === EnemyType.BOSS ? -45 : -20;
-            const barW = enemy.type === EnemyType.BOSS ? 60 : 20;
-            
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(-barW/2, barY, barW, 4);
-            ctx.fillStyle = hpPct > 0.5 ? '#4ade80' : '#f87171';
-            ctx.fillRect(-barW/2, barY, barW * hpPct, 4);
-            ctx.restore();
-        }
-        
-        // Frozen indicator
-        if (enemy.frozen > 0) {
-            ctx.save();
-            ctx.translate(enemy.position.x, enemy.position.y);
-            ctx.strokeStyle = '#67e8f9';
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.arc(0, 0, enemy.radius + 4, 0, Math.PI * 2); ctx.stroke();
+            ctx.translate(enemy.position.x, enemy.position.y - 12);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(-10, 0, 20, 3);
+            ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : '#ef4444';
+            ctx.fillRect(-10, 0, 20 * hpPct, 3);
             ctx.restore();
         }
     });
 
-    // 8. Draw Projectiles
+    // Projectiles
     projectilesRef.current.forEach(proj => {
-        ctx.save();
-        ctx.translate(proj.position.x, proj.position.y);
-        ctx.fillStyle = proj.color;
-        ctx.shadowColor = proj.color;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(0, 0, proj.radius + 1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        drawProjectile(ctx, proj, gameStateRef.current.era);
     });
 
-    // 9. Draw Particles
+    // Particles
     particlesRef.current.forEach(p => {
         ctx.save();
         ctx.globalAlpha = p.life / p.maxLife;
         ctx.fillStyle = p.color;
         if (p.type === 'ring') {
-            ctx.strokeStyle = p.color;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.strokeStyle = p.color; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2); ctx.stroke();
+        } else if (p.type === 'debris') {
+            ctx.fillRect(p.position.x, p.position.y, p.size, p.size);
         } else {
-            ctx.beginPath();
-            ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(p.position.x, p.position.y, p.size, 0, Math.PI * 2); ctx.fill();
         }
         ctx.restore();
     });
 
-    // 10. Floating Text
+    // Floating Text
     floatingTextsRef.current.forEach(ft => {
         ctx.save();
         ctx.globalAlpha = ft.life;
         ctx.fillStyle = ft.color;
-        ctx.shadowColor = '#000';
-        ctx.shadowBlur = 2;
-        ctx.font = 'bold 14px monospace';
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+        ctx.font = 'bold 16px "Inter", sans-serif';
         ctx.textAlign = 'center';
+        ctx.strokeText(ft.text, ft.position.x, ft.position.y);
         ctx.fillText(ft.text, ft.position.x, ft.position.y);
         ctx.restore();
     });
 
-    // 11. Scanline
-    ctx.fillStyle = theme.scanline;
-    ctx.fillRect(0, terrainRef.current.scanline, CANVAS_WIDTH, 4);
-    
-    // Vignette
-    const grad = ctx.createRadialGradient(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT/2, CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT);
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.6)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-    // 12. Preview
+    // Preview
     if (mousePosRef.current && selectedTowerType) {
         const gx = Math.floor(mousePosRef.current.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const gy = Math.floor(mousePosRef.current.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const config = TOWER_TYPES[selectedTowerType];
         
         ctx.beginPath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.setLineDash([4, 4]);
-        ctx.arc(gx, gy, config.range, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        ctx.arc(gx, gy, config.range, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.setLineDash([]);
 
-        // Using Math.hypot inline instead of distance function to avoid dependency issues or unnecessary complexity
         const isValid = gameStateRef.current.money >= config.cost 
                     && !isPointOnPath(gx, gy, 25, currentMap.waypoints) 
-                    && !towersRef.current.some(t => Math.hypot(t.position.x - gx, t.position.y - gy) < 20);
+                    && !towersRef.current.some(t => distance(t.position, {x: gx, y: gy}) < 20);
         
         ctx.fillStyle = isValid ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-        ctx.beginPath();
-        ctx.arc(gx, gy, 16, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(gx, gy, 16, 0, Math.PI * 2); ctx.fill();
     }
   }, [activeThemeId, currentMap, selectedPlacedTowerId, selectedTowerType]);
 
+  // Game Loop
   useEffect(() => {
     let animationFrameId: number;
     const loop = (timestamp: number) => {
         if (!lastFrameTimeRef.current) lastFrameTimeRef.current = timestamp;
         const deltaTime = timestamp - lastFrameTimeRef.current;
         lastFrameTimeRef.current = timestamp;
-
         accumulatorRef.current += deltaTime;
-
-        // Safety cap to prevent spiral of death
         if (accumulatorRef.current > 250) accumulatorRef.current = 250; 
-
-        // Run Logic at Fixed Time Step (60 FPS)
-        const FIXED_TIME_STEP = 1000 / 60; // ~16.666ms
-        
+        const FIXED_TIME_STEP = 1000 / 60;
         while (accumulatorRef.current >= FIXED_TIME_STEP) {
-            update(); // Execute one simulation tick
+            update();
             accumulatorRef.current -= FIXED_TIME_STEP;
         }
-
         draw();
         animationFrameId = requestAnimationFrame(loop);
     };
-    
     animationFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationFrameId);
   }, [update, draw]);
@@ -1273,6 +1289,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
   };
 
+  // Input Handling
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (gameStateRef.current.isGameOver || !hasStartedGame || isStoreOpen) return;
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -1292,41 +1309,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos) return; 
     
-    // 1. Check Collision with Perk Drops (Priority over towers)
+    // Perk Pickup
     const clickedPerkIndex = perkDropsRef.current.findIndex(p => distance(p.position, pos) < 30);
     if (clickedPerkIndex !== -1) {
         const perk = perkDropsRef.current[clickedPerkIndex];
-        
-        // NEW LOGIC: Store in inventory instead of immediate activation
-        // Add to inventory
-        setPerkInventory(prev => ({
-            ...prev,
-            [perk.type]: prev[perk.type] + 1
-        }));
-
+        setPerkInventory(prev => ({ ...prev, [perk.type]: prev[perk.type] + 1 }));
         spawnFloatingText(perk.position, "GOT IT!", "#fff");
-        
-        // Remove perk
         spawnParticle(perk.position, '#fff', 10, 'circle');
         perkDropsRef.current.splice(clickedPerkIndex, 1);
-        audioService.playBuild(); // Pickup sound
+        audioService.playBuild(); 
         triggerHaptic('success');
-        return; // Stop processing click
+        return;
     }
     
-    // 2. Check if clicked on existing tower
+    // Tower Select/Place
     const clickedTower = towersRef.current.find(t => distance(t.position, pos) < 20);
-    
     if (clickedTower) {
         setSelectedPlacedTowerId(clickedTower.id);
-        setSelectedTowerType(null); // Cancel placement if selecting a tower
+        setSelectedTowerType(null); 
         triggerHaptic('selection');
         return;
     } else {
-        // If clicking empty space, deselect tower unless we are placing
-        if (!selectedTowerType) {
-             setSelectedPlacedTowerId(null);
-        }
+        if (!selectedTowerType) setSelectedPlacedTowerId(null);
     }
 
     if (!selectedTowerType) return;
@@ -1344,7 +1348,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       gameStateRef.current.money -= config.cost;
       towersRef.current.push({
         id: Math.random().toString(), position: { x: gx, y: gy }, type: config.type,
-        range: config.range, damage: config.damage, cooldown: config.cooldown, lastShotFrame: 0, rotation: 0, level: 1
+        range: config.range, damage: config.damage, cooldown: config.cooldown, lastShotFrame: 0, rotation: 0, level: 1, eraBuilt: gameStateRef.current.era
       });
       triggerHaptic('light');
       setUiState({ ...gameStateRef.current });
@@ -1354,31 +1358,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     }
   };
   
-  const handlePointerLeave = () => {
-    if (!isPointerDownRef.current) {
-        mousePosRef.current = null;
-    }
-  };
+  const handlePointerLeave = () => { if (!isPointerDownRef.current) mousePosRef.current = null; };
   
   const resetGame = () => {
-      gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1, gameSpeed: 1 };
-      setHasStartedGame(false); // Go back to map select
+      gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1, gameSpeed: 1, era: 0, exp: 0, maxExp: ERA_DATA[0].maxExp };
+      setHasStartedGame(false); 
       towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = []; floatingTextsRef.current = [];
       perkDropsRef.current = []; 
-      
-      // Reset Perks
-      setActivePerks([]);
-      activePerksRef.current = [];
-      
-      // Reset Inventory
-      setPerkInventory({
-          [PerkType.DAMAGE]: 0,
-          [PerkType.SPEED]: 0,
-          [PerkType.MONEY]: 0,
-          [PerkType.FREEZE]: 0,
-      });
-
-      spawnQueueRef.current = []; // Clear Ref Queue
+      setActivePerks([]); activePerksRef.current = [];
+      setPerkInventory({ [PerkType.DAMAGE]: 0, [PerkType.SPEED]: 0, [PerkType.MONEY]: 0, [PerkType.FREEZE]: 0 });
+      spawnQueueRef.current = [];
       setUiState({...gameStateRef.current});
       triggerHaptic('medium');
   };
@@ -1398,379 +1387,233 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       triggerHaptic('selection');
   };
 
-  // --- UPGRADE / SELL LOGIC ---
+  // Helper logic for Upgrade/Sell omitted for brevity, using same logic as before but with updated cost checks if needed.
   const getSelectedTower = () => towersRef.current.find(t => t.id === selectedPlacedTowerId);
   const selectedTowerEntity = getSelectedTower();
-
   const handleUpgradeTower = () => {
     if (!selectedTowerEntity) return;
     const upgradeCost = Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.8 * selectedTowerEntity.level);
-    
     if (gameStateRef.current.money >= upgradeCost && selectedTowerEntity.level < 3) {
         gameStateRef.current.money -= upgradeCost;
         selectedTowerEntity.level++;
-        selectedTowerEntity.damage *= 1.3; // 30% damage boost
-        selectedTowerEntity.range *= 1.1; // 10% range boost
-        
-        audioService.playBuild();
-        triggerHaptic('success');
+        selectedTowerEntity.damage *= 1.3; selectedTowerEntity.range *= 1.1; 
+        audioService.playBuild(); triggerHaptic('success');
         spawnFloatingText(selectedTowerEntity.position, "UPGRADED!", "#fbbf24");
         setUiState({...gameStateRef.current});
-    } else {
-        triggerHaptic('error');
     }
   };
-
   const handleSellTower = () => {
     if (!selectedTowerEntity) return;
     const sellValue = Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.7 * selectedTowerEntity.level);
-    
     gameStateRef.current.money += sellValue;
     towersRef.current = towersRef.current.filter(t => t.id !== selectedPlacedTowerId);
-    
-    audioService.playBuild(); // Recycling sound?
-    spawnFloatingText(selectedTowerEntity.position, `+$${sellValue}`, "#fbbf24");
-    setSelectedPlacedTowerId(null);
-    setUiState({...gameStateRef.current});
+    audioService.playBuild(); spawnFloatingText(selectedTowerEntity.position, `+$${sellValue}`, "#fbbf24");
+    setSelectedPlacedTowerId(null); setUiState({...gameStateRef.current});
   };
 
-  // --- SKIN SHOP LOGIC ---
-  const handleBuySkin = (themeId: string, price: number) => {
-      // Mock logic for Telegram Stars purchase
-      // window.Telegram.WebApp.openInvoice(...)
-      
-      triggerHaptic('success');
-      audioService.playBuild();
-      
-      setUnlockedThemes(prev => [...prev, themeId]);
-      setActiveThemeId(themeId); // Auto-equip
-      spawnFloatingText({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }, `THEME ACQUIRED`, '#fbbf24');
-  };
-
-  const handleEquipSkin = (themeId: string) => {
-      setActiveThemeId(themeId);
-      triggerHaptic('selection');
-  };
-
+  // --- RENDER ---
   return (
-    <div className="flex flex-col gap-2 w-full h-full overflow-hidden box-border">
-      {/* 1. GAME CANVAS AREA (Maximized) */}
-      <div className="flex-1 relative group flex-shrink-0 mx-auto w-full flex justify-center items-center overflow-hidden bg-slate-950 shadow-2xl">
-        <canvas 
-          ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerLeave}
-          style={{ width: '100%', height: '100%', touchAction: 'none' }}
-          className="block cursor-crosshair"
-        />
+    <div className="flex flex-col gap-2 w-full h-full overflow-hidden box-border bg-[#1c1917]"> {/* Dark Brown BG */}
+      {/* 1. GAME CANVAS AREA */}
+      <div className="flex-1 relative group flex-shrink-0 mx-auto w-full h-full flex justify-center items-center overflow-hidden bg-black shadow-2xl">
+        {/* WRAPPER FOR ASPECT RATIO FIX: Ensures canvas is exactly 1:2 ratio within available space */}
+        <div className="relative w-full h-full max-w-full max-h-full flex justify-center items-center" style={{ aspectRatio: `${CANVAS_WIDTH}/${CANVAS_HEIGHT}` }}>
+            <canvas 
+            ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerLeave}
+            className="w-full h-full block object-contain"
+            style={{ touchAction: 'none' }}
+            />
 
-        {/* ACTIVE PERKS UI - Overlay showing remaining time */}
-        <div className="absolute top-14 right-3 flex flex-col gap-2 pointer-events-none">
-            {activePerks.map(perk => {
-                const info = PERK_STATS[perk.type];
-                // Use uiState.gameTime if available for smoother React updates, but fallback to ref for safety
-                // Actually uiState.gameTime is updated every 5 frames, so it's good for react render
-                const remaining = perk.endTime - uiState.gameTime;
-                const pct = Math.max(0, Math.min(1, remaining / perk.duration));
-                
-                return (
-                    <div key={perk.type} className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg p-2 flex items-center gap-2 animate-in slide-in-from-right-10 shadow-lg min-w-[120px]">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-inner" style={{backgroundColor: info.color + '40'}}>
-                            {info.icon}
+            {/* ERA UI (Top) */}
+            {hasStartedGame && !uiState.isGameOver && (
+                <div className="absolute top-0 left-0 w-full p-2 flex justify-between items-start pointer-events-none">
+                    <div className="bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700 text-xs font-bold text-white shadow-lg flex items-center gap-2">
+                        <span style={{ color: ERA_DATA[uiState.era].color }}>{ERA_DATA[uiState.era].name}</span>
+                        <span className="text-slate-500">|</span>
+                        <span>WAVE {uiState.wave}</span>
+                    </div>
+                    
+                    {/* EXP BAR */}
+                    <div className="flex flex-col items-end gap-1 w-1/2">
+                        {uiState.era < 2 && uiState.exp >= uiState.maxExp ? (
+                            <button 
+                                onClick={evolveEra}
+                                className="pointer-events-auto animate-bounce bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xs px-4 py-2 rounded-full shadow-xl border-2 border-yellow-200 flex items-center gap-1"
+                            >
+                                <ArrowUpCircle size={16} /> EVOLVE AGE
+                            </button>
+                        ) : (
+                        <div className="w-full bg-slate-900/80 backdrop-blur-md h-3 rounded-full border border-slate-700 overflow-hidden relative">
+                            <div 
+                                className="h-full transition-all duration-500"
+                                style={{ width: `${(uiState.exp / uiState.maxExp) * 100}%`, backgroundColor: ERA_DATA[uiState.era].color }}
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white drop-shadow-md">
+                                {Math.floor(uiState.exp)} / {uiState.maxExp} XP
+                            </span>
                         </div>
-                        <div className="flex-1">
-                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full rounded-full transition-all duration-100 ease-linear"
-                                    style={{ width: `${pct * 100}%`, backgroundColor: info.color }}
-                                />
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ACTIVE PERKS UI */}
+            <div className="absolute top-12 right-2 flex flex-col gap-2 pointer-events-none">
+                {activePerks.map(perk => {
+                    const info = PERK_STATS[perk.type];
+                    const remaining = perk.endTime - uiState.gameTime;
+                    const pct = Math.max(0, Math.min(1, remaining / perk.duration));
+                    return (
+                        <div key={perk.type} className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg p-1.5 flex items-center gap-2 shadow-lg min-w-[100px]">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-inner" style={{backgroundColor: info.color + '40'}}>
+                                {info.icon}
                             </div>
-                            <div className="text-[9px] font-bold text-slate-300 mt-1 uppercase tracking-wider">{perk.type}</div>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-        
-        {/* HUD: Wave Indicator (Permanent, Top-Left) */}
-        {!uiState.isGameOver && hasStartedGame && (
-             <div className="absolute top-3 left-3 z-10 pointer-events-none animate-in fade-in duration-500">
-                <div className="bg-slate-900/60 backdrop-blur-xl border border-blue-500/20 rounded-full px-4 py-1.5 flex items-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
-                    <div className={`w-2 h-2 rounded-full ${uiState.isPlaying ? 'bg-green-400 shadow-[0_0_8px_currentColor] animate-pulse' : 'bg-yellow-500'}`} />
-                    <span className="text-blue-100 font-display text-xs font-bold tracking-widest">WAVE {uiState.wave}</span>
-                </div>
-            </div>
-        )}
-        
-        {/* START SCREEN & MAP SELECT */}
-        {!hasStartedGame && !uiState.isPlaying && !uiState.isGameOver && (
-            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-md">
-                <div className="bg-slate-900/90 p-6 rounded-2xl border border-blue-500/30 text-center shadow-[0_0_50px_rgba(59,130,246,0.2)] w-[320px] backdrop-blur-xl">
-                    <h2 className="text-xl font-display text-white mb-1 tracking-widest">SELECT SECTOR</h2>
-                    <p className="text-slate-400 mb-4 text-xs uppercase tracking-wide">Tactical Map Data Loaded</p>
-                    
-                    <div className="flex items-center justify-between mb-4">
-                        <button onClick={() => changeMap('prev')} className="p-2 text-slate-400 hover:text-white transition-colors"><ChevronLeft /></button>
-                        <div className="flex flex-col items-center gap-2">
-                             <MapPreviewSVG map={currentMap} activeThemeId={activeThemeId} />
-                             <div className="font-bold text-lg text-blue-400 font-display">{currentMap.name}</div>
-                             <div className={`text-[10px] px-2 py-0.5 rounded font-bold tracking-wider ${
-                                 currentMap.difficulty === 'EASY' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 
-                                 currentMap.difficulty === 'MEDIUM' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                             }`}>{currentMap.difficulty}</div>
-                        </div>
-                        <button onClick={() => changeMap('next')} className="p-2 text-slate-400 hover:text-white transition-colors"><ChevronRight /></button>
-                    </div>
-
-                    <button 
-                      onClick={initializeGame}
-                      className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-all flex items-center justify-center gap-2 mx-auto text-sm tracking-widest shadow-[0_0_20px_rgba(37,99,235,0.4)]"
-                    >
-                        <Play size={18} /> INITIATE DROP
-                    </button>
-                </div>
-            </div>
-        )}
-
-        {/* SKIN SHOP MODAL */}
-        {isStoreOpen && (
-            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-40 backdrop-blur-md animate-in fade-in duration-200">
-                <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-4 w-[320px] shadow-[0_0_50px_rgba(168,85,247,0.2)] relative max-h-[90%] flex flex-col">
-                    <button onClick={() => setIsStoreOpen(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white p-2 z-10">
-                        <X size={20} />
-                    </button>
-                    
-                    <div className="text-center mb-4">
-                        <h2 className="text-xl font-display text-purple-400 mb-1 tracking-widest">VISUAL UPGRADES</h2>
-                        <p className="text-slate-400 text-xs">Customize tactical interface</p>
-                    </div>
-
-                    <div className="overflow-y-auto space-y-3 pr-2 scrollbar-hide">
-                        {THEMES.map(theme => {
-                            const isOwned = unlockedThemes.includes(theme.id);
-                            const isActive = activeThemeId === theme.id;
-                            
-                            return (
-                                <div key={theme.id} className={`rounded-xl p-3 border transition-all relative overflow-hidden group ${isActive ? 'border-green-500 bg-green-500/5' : 'border-slate-700 bg-slate-800'}`}>
-                                    <div className="flex items-center gap-3">
-                                        {/* Color Preview */}
-                                        <div className="w-12 h-12 rounded-lg shadow-inner border border-white/10 shrink-0" style={{ background: theme.background }}>
-                                            <div className="w-full h-full opacity-30" style={{ backgroundImage: `linear-gradient(${theme.grid} 1px, transparent 1px), linear-gradient(90deg, ${theme.grid} 1px, transparent 1px)`, backgroundSize: '8px 8px' }} />
-                                        </div>
-                                        
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-white text-sm font-display flex items-center gap-2">
-                                                {theme.name}
-                                                {isActive && <div className="text-[9px] bg-green-500 text-black px-1.5 rounded font-bold">ACTIVE</div>}
-                                            </div>
-                                            <div className="text-[10px] text-slate-400 truncate">Holographic Field Mod</div>
-                                        </div>
-
-                                        <div className="shrink-0">
-                                            {isOwned ? (
-                                                isActive ? (
-                                                    <div className="text-green-500 p-2"><Check size={20} /></div>
-                                                ) : (
-                                                    <button 
-                                                        onClick={() => handleEquipSkin(theme.id)}
-                                                        className="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white transition-colors"
-                                                    >
-                                                        EQUIP
-                                                    </button>
-                                                )
-                                            ) : (
-                                                <button 
-                                                    onClick={() => handleBuySkin(theme.id, theme.price)}
-                                                    className="px-3 py-1.5 rounded text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1 shadow-lg shadow-blue-500/20"
-                                                >
-                                                    <Star size={12} fill="currentColor" /> {theme.price}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
+                            <div className="flex-1">
+                                <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full transition-all duration-100 ease-linear" style={{ width: `${pct * 100}%`, backgroundColor: info.color }} />
                                 </div>
-                            );
-                        })}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            
+            {/* START SCREEN */}
+            {!hasStartedGame && !uiState.isPlaying && !uiState.isGameOver && (
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-md">
+                    <div className="bg-[#292524] p-6 rounded-2xl border border-[#78350f] text-center shadow-2xl w-[320px]">
+                        <h2 className="text-xl font-display text-[#fcd34d] mb-1 tracking-widest">CHOOSE BATTLEFIELD</h2>
+                        <p className="text-[#a8a29e] mb-4 text-xs uppercase">Conquer the Ages</p>
+                        
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={() => changeMap('prev')} className="p-2 text-slate-400 hover:text-white transition-colors"><ChevronLeft /></button>
+                            <div className="flex flex-col items-center gap-2">
+                                <MapPreviewSVG map={currentMap} activeThemeId={activeThemeId} />
+                                <div className="font-bold text-lg text-white font-display">{currentMap.name}</div>
+                                <div className="text-[10px] px-2 py-0.5 rounded font-bold bg-black/30 text-[#a8a29e]">{currentMap.difficulty}</div>
+                            </div>
+                            <button onClick={() => changeMap('next')} className="p-2 text-slate-400 hover:text-white transition-colors"><ChevronRight /></button>
+                        </div>
+
+                        <button 
+                        onClick={initializeGame}
+                        className="w-full px-6 py-3 bg-[#ea580c] hover:bg-[#c2410c] text-white rounded font-bold transition-all flex items-center justify-center gap-2 mx-auto text-sm tracking-widest shadow-lg"
+                        >
+                            <Play size={18} /> START CONQUEST
+                        </button>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
 
-        {/* NOTIFICATION OVERLAY */}
-        {notification && (
-            <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none flex flex-col items-center justify-center animate-in fade-in zoom-in-90 duration-300 ${notification.type === 'boss' ? 'animate-pulse' : ''}`}>
-                 <h2 className={`font-display text-4xl lg:text-6xl font-black ${notification.color} drop-shadow-[0_0_25px_rgba(0,0,0,1)] tracking-widest text-center`}>
-                     {notification.title}
-                 </h2>
-                 {notification.subtitle && (
-                     <div className="bg-red-950/80 text-red-200 px-6 py-2 rounded-full text-sm font-mono border border-red-500/50 mt-4 flex items-center gap-2 backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.4)]">
-                         <AlertTriangle size={16} /> {notification.subtitle}
-                     </div>
-                 )}
-            </div>
-        )}
-
-        {/* UPGRADE MENU OVERLAY */}
-        {selectedTowerEntity && !uiState.isGameOver && !isStoreOpen && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-blue-500/30 rounded-2xl p-2 flex gap-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl z-10 animate-in fade-in slide-in-from-bottom-4">
-                 <div className="flex flex-col items-center border-r border-slate-700/50 pr-4 justify-center">
-                     <span className="text-[10px] font-bold text-slate-400 mb-0.5 tracking-wider">LEVEL {selectedTowerEntity.level}</span>
-                     <div className="font-display text-blue-300 font-bold text-xs">{TOWER_TYPES[selectedTowerEntity.type].name}</div>
-                 </div>
-                 
-                 {selectedTowerEntity.level < 3 ? (
-                     <button onClick={handleUpgradeTower} className="flex flex-col items-center justify-center gap-1 min-w-[50px] hover:bg-slate-800/50 rounded p-1 transition-colors group">
-                        <div className="bg-yellow-500/10 p-1.5 rounded-full group-hover:bg-yellow-500/20 transition-colors border border-yellow-500/30">
-                            <Zap size={14} className="text-yellow-400" />
+            {/* NOTIFICATION */}
+            {notification && (
+                <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none flex flex-col items-center justify-center animate-in fade-in zoom-in-90 duration-300`}>
+                    <h2 className={`font-display text-4xl lg:text-5xl font-black ${notification.color} drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] tracking-widest text-center stroke-black`}>
+                        {notification.title}
+                    </h2>
+                    {notification.subtitle && (
+                        <div className="bg-black/60 text-white px-4 py-1 rounded-full text-xs font-mono border border-white/20 mt-2 backdrop-blur-md">
+                            {notification.subtitle}
                         </div>
-                        <span className="text-[10px] font-bold text-yellow-400">-${Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.8 * selectedTowerEntity.level)}</span>
-                     </button>
-                 ) : (
-                     <div className="flex flex-col items-center justify-center min-w-[50px] opacity-50">
-                         <span className="text-[10px] font-bold text-yellow-500">MAX</span>
-                     </div>
-                 )}
+                    )}
+                </div>
+            )}
 
-                 <button onClick={handleSellTower} className="flex flex-col items-center justify-center gap-1 min-w-[50px] hover:bg-slate-800/50 rounded p-1 transition-colors group">
-                    <div className="bg-red-500/10 p-1.5 rounded-full group-hover:bg-red-500/20 transition-colors border border-red-500/30">
-                        <Trash2 size={14} className="text-red-400" />
+            {/* UPGRADE MENU */}
+            {selectedTowerEntity && !uiState.isGameOver && !isStoreOpen && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#292524] border border-[#78350f] rounded-xl p-2 flex gap-4 shadow-xl z-10">
+                    <div className="flex flex-col items-center border-r border-white/10 pr-4 justify-center">
+                        <span className="text-[10px] font-bold text-[#a8a29e] mb-0.5">LVL {selectedTowerEntity.level}</span>
+                        {/* Dynamic Name based on Era */}
+                        <div className="font-display text-[#fcd34d] font-bold text-xs">
+                            {ERA_DATA[uiState.era].towerNames[selectedTowerEntity.type]}
+                        </div>
                     </div>
-                    <span className="text-[10px] font-bold text-red-400">+${Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.7 * selectedTowerEntity.level)}</span>
-                 </button>
-            </div>
-        )}
+                    {selectedTowerEntity.level < 3 ? (
+                        <button onClick={handleUpgradeTower} className="flex flex-col items-center justify-center gap-1 min-w-[50px] hover:bg-white/5 rounded p-1 transition-colors group">
+                            <div className="bg-yellow-500/10 p-1.5 rounded-full border border-yellow-500/30"><Zap size={14} className="text-yellow-400" /></div>
+                            <span className="text-[10px] font-bold text-yellow-400">-${Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.8 * selectedTowerEntity.level)}</span>
+                        </button>
+                    ) : <div className="min-w-[50px] flex items-center justify-center text-xs text-slate-500 font-bold">MAX</div>}
+                    <button onClick={handleSellTower} className="flex flex-col items-center justify-center gap-1 min-w-[50px] hover:bg-white/5 rounded p-1 transition-colors group">
+                        <div className="bg-red-500/10 p-1.5 rounded-full border border-red-500/30"><Trash2 size={14} className="text-red-400" /></div>
+                        <span className="text-[10px] font-bold text-red-400">+${Math.floor(TOWER_TYPES[selectedTowerEntity.type].cost * 0.7 * selectedTowerEntity.level)}</span>
+                    </button>
+                </div>
+            )}
 
-        {uiState.isGameOver && (
-            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-sm">
-                <h2 className="text-4xl lg:text-6xl font-display text-red-500 mb-2 animate-pulse drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">CRITICAL FAILURE</h2>
-                <p className="text-slate-400 text-lg lg:text-xl mb-8 font-mono">Signal Lost at Wave {uiState.wave}</p>
-                <button onClick={resetGame} className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-sm font-bold transition flex items-center gap-2 tracking-widest shadow-[0_0_20px_rgba(79,70,229,0.4)]">
-                    <RefreshCw size={20} /> REBOOT SYSTEM
-                </button>
-            </div>
-        )}
+            {uiState.isGameOver && (
+                <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-sm">
+                    <h2 className="text-4xl font-display text-red-600 mb-2">DEFEAT</h2>
+                    <p className="text-slate-400 text-lg mb-8">Empire fell at Wave {uiState.wave}</p>
+                    <button onClick={resetGame} className="px-8 py-3 bg-[#ea580c] hover:bg-[#c2410c] text-white rounded font-bold flex items-center gap-2">
+                        <RefreshCw size={18} /> TRY AGAIN
+                    </button>
+                </div>
+            )}
+        </div>
       </div>
 
-      {/* 2. COMPACT BOTTOM MENU */}
-      <div className="shrink-0 flex flex-col gap-1 w-full min-w-0 pb-1 px-2 relative">
-        
-        {/* ROW 1: COMPACT STATS & CONTROLS */}
-        <div className="bg-slate-900/80 backdrop-blur-xl px-3 py-1.5 rounded-lg border border-slate-700/50 flex items-center justify-between w-full shadow-lg h-10">
+      {/* 2. MENU */}
+      <div className="shrink-0 flex flex-col gap-1 w-full min-w-0 pb-1 px-2 relative bg-[#1c1917]">
+        {/* STATS */}
+        <div className="bg-[#292524] px-3 py-1.5 rounded-lg border border-[#44403c] flex items-center justify-between w-full shadow-lg h-10">
              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                    <Heart className="text-red-500 w-3.5 h-3.5 drop-shadow-sm" />
-                    <span className="text-sm font-bold text-red-100">{uiState.lives}</span>
-                </div>
-                <div className="flex items-center gap-1.5 relative">
-                    <Coins className="text-yellow-400 w-3.5 h-3.5 drop-shadow-sm" />
-                    <span className="text-sm font-bold text-yellow-100">{uiState.money}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <Shield className="text-blue-400 w-3.5 h-3.5 drop-shadow-sm" />
-                    <span className="text-sm font-bold text-blue-100">W{uiState.wave}</span>
-                </div>
+                <div className="flex items-center gap-1.5"><Heart className="text-red-500 w-3.5 h-3.5" /><span className="text-sm font-bold text-red-100">{uiState.lives}</span></div>
+                <div className="flex items-center gap-1.5"><Coins className="text-yellow-400 w-3.5 h-3.5" /><span className="text-sm font-bold text-yellow-100">{uiState.money}</span></div>
              </div>
-
-             <div className="flex items-center gap-2">
-                 {/* Skin Shop Toggle */}
-                 <button 
-                    onClick={() => setIsStoreOpen(true)}
-                    className="p-1 px-2 rounded flex items-center gap-1 font-bold text-[10px] transition-colors border bg-purple-500/20 border-purple-400/50 text-purple-200"
-                 >
-                    <Palette size={12} /> SKIN
-                 </button>
-
-                 {/* Speed Toggle */}
-                 <button 
-                  onClick={toggleGameSpeed}
-                  className={`p-1 px-2 rounded flex items-center gap-1 font-bold text-[10px] transition-colors border ${uiState.gameSpeed === 2 ? 'bg-blue-500/20 border-blue-400/50 text-blue-200' : 'bg-slate-800/50 border-slate-700 text-slate-400'}`}
-                >
-                    <FastForward size={12} /> {uiState.gameSpeed}x
-                </button>
-             </div>
+             <button onClick={toggleGameSpeed} className={`p-1 px-2 rounded flex items-center gap-1 font-bold text-[10px] transition-colors border ${uiState.gameSpeed === 2 ? 'bg-blue-500/20 border-blue-400/50 text-blue-200' : 'bg-white/5 border-white/10 text-slate-400'}`}>
+                <FastForward size={12} /> {uiState.gameSpeed}x
+            </button>
         </div>
 
-        {/* ROW 2: PLAY BTN + TOWERS */}
-        <div className="bg-slate-900/80 backdrop-blur-xl p-1 rounded-lg border border-slate-700/50 flex gap-2 w-full shadow-lg h-20 items-center overflow-hidden">
-             {/* Play Button */}
+        {/* TOWERS */}
+        <div className="bg-[#292524] p-1 rounded-lg border border-[#44403c] flex gap-2 w-full shadow-lg h-20 items-center overflow-hidden">
              <button 
                   onClick={handleStartWave}
                   disabled={uiState.isPlaying} 
                   className={`h-full aspect-square rounded-md flex flex-col items-center justify-center gap-1 font-bold transition-all relative overflow-hidden flex-shrink-0
-                    ${uiState.isPlaying 
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
-                        : uiState.autoStartTimer > 0 
-                            ? 'bg-yellow-600 hover:bg-yellow-500 text-white animate-pulse border border-yellow-400/50' 
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/50 shadow-inner'}`}
+                    ${uiState.isPlaying ? 'bg-black/50 text-slate-500 cursor-not-allowed' : uiState.autoStartTimer > 0 ? 'bg-yellow-600 text-white animate-pulse' : 'bg-[#ea580c] text-white'}`}
                 >
-                    {uiState.autoStartTimer > 0 ? (
-                        <>
-                            <Timer size={20} />
-                            <span className="text-[10px]">{Math.ceil(uiState.autoStartTimer / 60)}s</span>
-                        </>
-                    ) : (
-                        <Play size={24} fill="currentColor" />
-                    )}
+                    {uiState.autoStartTimer > 0 ? <><Timer size={20} /><span className="text-[10px]">{Math.ceil(uiState.autoStartTimer/60)}s</span></> : <Play size={24} fill="currentColor" />}
             </button>
-            
-            <div className="w-[1px] h-[80%] bg-slate-700/50" />
-
-            {/* Tower Scroll List */}
+            <div className="w-[1px] h-[80%] bg-white/10" />
             <div className="flex gap-1 overflow-x-auto h-full items-center scrollbar-hide px-1 w-full">
                 {Object.values(TOWER_TYPES).map(tower => (
                     <button
                         key={tower.type}
-                        onClick={() => { 
-                            setSelectedTowerType(selectedTowerType === tower.type ? null : tower.type); 
-                            setSelectedPlacedTowerId(null); 
-                            triggerHaptic('light'); 
-                        }}
+                        onClick={() => { setSelectedTowerType(selectedTowerType === tower.type ? null : tower.type); setSelectedPlacedTowerId(null); triggerHaptic('light'); }}
                         className={`min-w-[64px] h-[90%] rounded-md border flex flex-col items-center justify-center gap-0.5 transition-all shrink-0 relative
-                            ${selectedTowerType === tower.type 
-                                ? 'border-blue-500 bg-blue-500/10' 
-                                : 'border-slate-800 bg-slate-950/50 hover:bg-slate-900'}`}
+                            ${selectedTowerType === tower.type ? 'border-yellow-500 bg-yellow-500/10' : 'border-white/5 bg-black/20 hover:bg-black/40'}`}
                     >
-                        <div className="w-8 h-8">
-                             <TowerIcon type={tower.type} color={tower.color} />
-                        </div>
-                        <div className="text-[9px] text-yellow-500 font-mono font-bold">${tower.cost}</div>
+                        <div className="w-8 h-8"><TowerIcon type={tower.type} era={uiState.era} /></div>
+                        <div className="text-[9px] text-[#fbbf24] font-mono font-bold">${tower.cost}</div>
                     </button>
                 ))}
             </div>
         </div>
 
-        {/* ROW 3: PERK INVENTORY BAR (New dedicated row) */}
-        <div className="bg-slate-900/80 backdrop-blur-xl px-2 py-1 rounded-lg border border-slate-700/50 flex gap-2 w-full shadow-lg h-14 items-center justify-between">
+        {/* PERKS */}
+        <div className="bg-[#292524] px-2 py-1 rounded-lg border border-[#44403c] flex gap-2 w-full shadow-lg h-14 items-center justify-between">
              {Object.entries(PERK_STATS).map(([type, stats]) => {
                  const count = perkInventory[type as PerkType];
-                 const isActive = activePerks.some(p => p.type === type);
-                 
                  return (
                      <button
                         key={type}
                         onClick={() => activatePerk(type as PerkType)}
                         disabled={count <= 0}
                         className={`flex-1 h-full rounded border flex flex-col items-center justify-center relative transition-all active:scale-95
-                            ${count > 0 
-                                ? 'bg-slate-800 hover:bg-slate-700 border-slate-600 cursor-pointer shadow-sm' 
-                                : 'bg-slate-950/50 border-slate-800/50 opacity-40 cursor-not-allowed'}
-                            ${isActive ? 'ring-2 ring-offset-1 ring-offset-slate-900 animate-pulse' : ''}    
+                            ${count > 0 ? 'bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer' : 'bg-black/20 border-white/5 opacity-40 cursor-not-allowed'}
                         `}
                         style={{ borderColor: count > 0 ? stats.color : undefined }}
                      >
                          <div className="text-xl leading-none mb-1">{stats.icon}</div>
-                         <div className="text-[8px] font-bold font-display leading-none" style={{ color: count > 0 ? stats.color : '#64748b' }}>
-                            {stats.name}
-                         </div>
-                         
-                         {/* Count Badge */}
-                         {count > 0 && (
-                             <div className="absolute -top-1.5 -right-1.5 bg-white text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                                 {count}
-                             </div>
-                         )}
+                         <div className="text-[8px] font-bold leading-none" style={{ color: count > 0 ? stats.color : '#64748b' }}>{stats.name}</div>
+                         {count > 0 && <div className="absolute -top-1.5 -right-1.5 bg-white text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">{count}</div>}
                      </button>
                  );
              })}

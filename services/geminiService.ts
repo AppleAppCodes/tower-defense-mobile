@@ -17,7 +17,7 @@ const getGameStatePrompt = (gameState: GameState, towers: Tower[]) => {
     - Towers Built: ${JSON.stringify(towerSummary)}
     
     Tower Stats Reference:
-    ${Object.values(TOWER_TYPES).map(t => `${t.name}: Cost ${t.cost}, Dmg ${t.damage}, Type ${t.type}`).join('\n')}
+    ${Object.values(TOWER_TYPES).map(t => `${t.baseName}: Cost ${t.cost}, Dmg ${t.damage}, Type ${t.type}`).join('\n')}
 
     As an expert Tower Defense strategist, provide a ONE SENTENCE tactical tip for the player. 
     Focus on what they should build or upgrade next based on their money and wave.

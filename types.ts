@@ -1,3 +1,4 @@
+
 export type Vector2D = { x: number; y: number };
 
 export enum TowerType {
@@ -40,14 +41,12 @@ export interface ActivePerk {
 }
 
 export interface TowerConfig {
-  name: string;
   type: TowerType;
   cost: number;
   range: number;
   damage: number;
   cooldown: number; // Frames between shots
-  color: string;
-  description: string;
+  baseName: string; // Generic name used for ID
 }
 
 export interface MapDefinition {
@@ -84,6 +83,7 @@ export interface Enemy extends Entity {
   distanceTraveled: number; // Used for tie-breaking targeting
   frozen: number; // Frames remaining frozen
   moneyReward: number;
+  expReward: number; // New EXP field
   color: string;
   radius: number;
 }
@@ -96,6 +96,7 @@ export interface Tower extends Entity {
   damage: number;
   cooldown: number;
   rotation: number; // Radians
+  eraBuilt: number; // To track visuals if we want mixed eras (currently global era applies)
 }
 
 export interface Projectile extends Entity {
@@ -109,6 +110,7 @@ export interface Projectile extends Entity {
   blastRadius?: number;
   effect?: 'FREEZE' | 'SHOCK'; // Status effects
   velocity: Vector2D; // Added for trails
+  visualType: 'ARROW' | 'ROCK' | 'BULLET' | 'MISSILE' | 'MAGIC'; // For rendering
 }
 
 export interface Particle {
@@ -119,7 +121,7 @@ export interface Particle {
   maxLife: number;
   color: string;
   size: number;
-  type: 'circle' | 'ring'; // New type for shockwaves
+  type: 'circle' | 'ring' | 'debris'; // debris for wood/stone chips
 }
 
 export interface FloatingText {
@@ -140,6 +142,11 @@ export interface GameState {
   gameTime: number; // Total frames
   autoStartTimer: number; // Frames until next wave
   gameSpeed: number; // 1 or 2
+  
+  // Age of Empires Mechanics
+  era: number; // 0 = Stone, 1 = Castle, 2 = Imperial
+  exp: number;
+  maxExp: number;
 }
 
 export interface WaveConfig {
