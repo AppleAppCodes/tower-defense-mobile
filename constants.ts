@@ -189,18 +189,19 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
   }
 };
 
+// REDUCED SPEEDS (Approx 50% slower)
 export const ENEMY_STATS: Record<EnemyType, { maxHp: number; speed: number; reward: number; color: string; radius: number }> = {
-  [EnemyType.NORMAL]: { maxHp: 85, speed: 2, reward: 10, color: '#94a3b8', radius: 14 }, 
-  [EnemyType.FAST]: { maxHp: 45, speed: 4.5, reward: 15, color: '#a3e635', radius: 10 },   
-  [EnemyType.TANK]: { maxHp: 350, speed: 0.8, reward: 35, color: '#475569', radius: 18 },   
-  [EnemyType.BOSS]: { maxHp: 3500, speed: 0.4, reward: 250, color: '#ef4444', radius: 32 }, 
+  [EnemyType.NORMAL]: { maxHp: 85, speed: 1.0, reward: 10, color: '#94a3b8', radius: 14 }, 
+  [EnemyType.FAST]: { maxHp: 45, speed: 2.2, reward: 15, color: '#a3e635', radius: 10 },   
+  [EnemyType.TANK]: { maxHp: 350, speed: 0.5, reward: 35, color: '#475569', radius: 18 },   
+  [EnemyType.BOSS]: { maxHp: 3500, speed: 0.3, reward: 250, color: '#ef4444', radius: 32 }, 
 };
 
-export const PERK_STATS: Record<PerkType, { color: string; duration: number; icon: string }> = {
-  [PerkType.DAMAGE]: { color: '#ef4444', duration: 600, icon: '⚔️' }, // 10s
-  [PerkType.SPEED]: { color: '#eab308', duration: 600, icon: '⚡' },  // 10s
-  [PerkType.MONEY]: { color: '#22c55e', duration: 0, icon: '💰' },    // Instant
-  [PerkType.FREEZE]: { color: '#06b6d4', duration: 0, icon: '❄️' }     // Instant
+export const PERK_STATS: Record<PerkType, { color: string; duration: number; icon: string, name: string }> = {
+  [PerkType.DAMAGE]: { color: '#ef4444', duration: 600, icon: '⚔️', name: 'DMG BOOST' },
+  [PerkType.SPEED]: { color: '#eab308', duration: 600, icon: '⚡', name: 'HYPER SPD' },
+  [PerkType.MONEY]: { color: '#22c55e', duration: 0, icon: '💰', name: 'CASH DROP' },
+  [PerkType.FREEZE]: { color: '#06b6d4', duration: 0, icon: '❄️', name: 'DEEP FRZ' }
 };
 
 export const INITIAL_STATE = {

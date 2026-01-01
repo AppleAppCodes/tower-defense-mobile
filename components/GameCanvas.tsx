@@ -196,7 +196,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   // NEW: Perks refs
   const perkDropsRef = useRef<PerkDrop[]>([]);
   const [activePerks, setActivePerks] = useState<ActivePerk[]>([]);
-  const [storedPerk, setStoredPerk] = useState<PerkType | null>(null);
+  
+  // INVENTORY SYSTEM
+  const [perkInventory, setPerkInventory] = useState<Record<PerkType, number>>({
+      [PerkType.DAMAGE]: 0,
+      [PerkType.SPEED]: 0,
+      [PerkType.MONEY]: 0,
+      [PerkType.FREEZE]: 0,
+  });
   
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
@@ -328,15 +335,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       }
   };
 
-  const activateStoredPerk = () => {
-    if (!storedPerk) return;
+  const activatePerk = (type: PerkType) => {
+    if (perkInventory[type] <= 0) return;
+
+    // Decrement inventory
+    setPerkInventory(prev => ({
+        ...prev,
+        [type]: Math.max(0, prev[type] - 1)
+    }));
 
     // Apply Immediate Effect
-    if (storedPerk === PerkType.MONEY) {
+    if (type === PerkType.MONEY) {
         gameStateRef.current.money += 200; // Bonus cash for active use
         spawnFloatingText({x: CANVAS_WIDTH/2, y: CANVAS_HEIGHT/2}, "+$200", "#22c55e");
         audioService.playBuild(); 
-    } else if (storedPerk === PerkType.FREEZE) {
+    } else if (type === PerkType.FREEZE) {
         enemiesRef.current.forEach(e => e.frozen = 240); // 4 seconds
         // Full screen freeze effect particles
         for(let i=0; i<5; i++) {
@@ -348,11 +361,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         audioService.playShoot('LASER');
     } else {
         // Apply Buff
-        const duration = PERK_STATS[storedPerk].duration;
+        const duration = PERK_STATS[type].duration;
         setActivePerks(prev => {
-            const filtered = prev.filter(p => p.type !== storedPerk);
+            const filtered = prev.filter(p => p.type !== type);
             return [...filtered, {
-                type: storedPerk,
+                type: type,
                 endTime: gameStateRef.current.gameTime + duration,
                 duration: duration
             }];
@@ -360,7 +373,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         audioService.playAlarm(); 
     }
     
-    setStoredPerk(null);
     triggerHaptic('success');
   };
 
@@ -387,12 +399,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     
     for (let i = 0; i < count; i++) {
       let type = EnemyType.NORMAL;
-      if (waveNum > 2 && i % 3 === 0) type = EnemyType.FAST;
-      if (waveNum > 4 && i % 5 === 0) type = EnemyType.TANK;
-      // Spawn Boss last on boss waves
-      if (isBossWave && i === count - 1) type = EnemyType.BOSS;
+      // FIX: Default Interval is 30 frames (0.5s), not "i * 60"
+      let interval = 30; 
+
+      if (waveNum > 2 && i % 3 === 0) {
+          type = EnemyType.FAST;
+          interval = 15; // Fast swarm: 0.25s
+      }
+      if (waveNum > 4 && i % 6 === 0) {
+          type = EnemyType.TANK;
+          interval = 60; // Tank: 1.0s gap after
+      }
       
-      newQueue.push({ type, delay: i * 60 });
+      // Boss Logic
+      if (isBossWave && i === count - 1) {
+          type = EnemyType.BOSS;
+          interval = 120; // Big gap before boss
+      }
+
+      // First enemy comes immediately
+      if (i === 0) interval = 0;
+      
+      newQueue.push({ type, delay: interval });
     }
     // Set synchronous ref
     spawnQueueRef.current = newQueue;
@@ -408,6 +436,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         setUiState(prev => ({ ...prev, isPlaying: true, autoStartTimer: -1 }));
     }
   }, [startWave]);
+
+  const initializeGame = useCallback(() => {
+      setHasStartedGame(true);
+      // Start with 5 seconds (300 frames) countdown for the first wave
+      gameStateRef.current.autoStartTimer = 300;
+      gameStateRef.current.isPlaying = false; 
+      setUiState(prev => ({ ...prev, autoStartTimer: 300 }));
+      triggerHaptic('medium');
+  }, []);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -1290,9 +1327,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         const perk = perkDropsRef.current[clickedPerkIndex];
         
         // NEW LOGIC: Store in inventory instead of immediate activation
-        // If we already have a stored perk, we swap (or could choose to ignore)
-        setStoredPerk(perk.type);
-        spawnFloatingText(perk.position, "PICKED UP!", "#fff");
+        // Add to inventory
+        setPerkInventory(prev => ({
+            ...prev,
+            [perk.type]: prev[perk.type] + 1
+        }));
+
+        spawnFloatingText(perk.position, "GOT IT!", "#fff");
         
         // Remove perk
         spawnParticle(perk.position, '#fff', 10, 'circle');
@@ -1353,7 +1394,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       setHasStartedGame(false); // Go back to map select
       towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = []; floatingTextsRef.current = [];
       perkDropsRef.current = []; setActivePerks([]);
-      setStoredPerk(null);
+      
+      // Reset Inventory
+      setPerkInventory({
+          [PerkType.DAMAGE]: 0,
+          [PerkType.SPEED]: 0,
+          [PerkType.MONEY]: 0,
+          [PerkType.FREEZE]: 0,
+      });
+
       spawnQueueRef.current = []; // Clear Ref Queue
       setUiState({...gameStateRef.current});
       triggerHaptic('medium');
@@ -1442,7 +1491,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           className="block cursor-crosshair"
         />
 
-        {/* ACTIVE PERKS UI */}
+        {/* ACTIVE PERKS UI - Overlay showing remaining time */}
         <div className="absolute top-14 right-3 flex flex-col gap-2 pointer-events-none">
             {activePerks.map(perk => {
                 const info = PERK_STATS[perk.type];
@@ -1499,7 +1548,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                     </div>
 
                     <button 
-                      onClick={handleStartWave}
+                      onClick={initializeGame}
                       className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-all flex items-center justify-center gap-2 mx-auto text-sm tracking-widest shadow-[0_0_20px_rgba(37,99,235,0.4)]"
                     >
                         <Play size={18} /> INITIATE DROP
@@ -1666,29 +1715,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
              </div>
         </div>
 
-        {/* ACTIVE PERK BUTTON (Floating above towers) */}
-        {hasStartedGame && !uiState.isGameOver && (
-             <div className="absolute right-4 bottom-24 z-20">
-                 {storedPerk ? (
-                     <button 
-                        onClick={activateStoredPerk}
-                        className="w-16 h-16 rounded-full bg-slate-900 border-2 border-white/20 shadow-[0_0_20px_currentColor] flex flex-col items-center justify-center animate-pulse hover:scale-105 active:scale-95 transition-all"
-                        style={{ borderColor: PERK_STATS[storedPerk].color, color: PERK_STATS[storedPerk].color, boxShadow: `0 0 25px ${PERK_STATS[storedPerk].color}60` }}
-                     >
-                        <span className="text-2xl drop-shadow-md">{PERK_STATS[storedPerk].icon}</span>
-                        <span className="text-[9px] font-bold font-display uppercase mt-1">ACTIVATE</span>
-                     </button>
-                 ) : (
-                     <div className="w-16 h-16 rounded-full bg-slate-950/50 border-2 border-slate-800 flex items-center justify-center">
-                         <div className="w-12 h-12 rounded-full border border-slate-800/50 bg-slate-900/50 flex items-center justify-center">
-                             <Zap size={20} className="text-slate-700" />
-                         </div>
-                     </div>
-                 )}
-             </div>
-        )}
-
-        {/* ROW 2: PLAY BTN + TOWERS (Combined) */}
+        {/* ROW 2: PLAY BTN + TOWERS */}
         <div className="bg-slate-900/80 backdrop-blur-xl p-1 rounded-lg border border-slate-700/50 flex gap-2 w-full shadow-lg h-20 items-center overflow-hidden">
              {/* Play Button */}
              <button 
@@ -1735,6 +1762,41 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                     </button>
                 ))}
             </div>
+        </div>
+
+        {/* ROW 3: PERK INVENTORY BAR (New dedicated row) */}
+        <div className="bg-slate-900/80 backdrop-blur-xl px-2 py-1 rounded-lg border border-slate-700/50 flex gap-2 w-full shadow-lg h-14 items-center justify-between">
+             {Object.entries(PERK_STATS).map(([type, stats]) => {
+                 const count = perkInventory[type as PerkType];
+                 const isActive = activePerks.some(p => p.type === type);
+                 
+                 return (
+                     <button
+                        key={type}
+                        onClick={() => activatePerk(type as PerkType)}
+                        disabled={count <= 0}
+                        className={`flex-1 h-full rounded border flex flex-col items-center justify-center relative transition-all active:scale-95
+                            ${count > 0 
+                                ? 'bg-slate-800 hover:bg-slate-700 border-slate-600 cursor-pointer shadow-sm' 
+                                : 'bg-slate-950/50 border-slate-800/50 opacity-40 cursor-not-allowed'}
+                            ${isActive ? 'ring-2 ring-offset-1 ring-offset-slate-900 animate-pulse' : ''}    
+                        `}
+                        style={{ borderColor: count > 0 ? stats.color : undefined }}
+                     >
+                         <div className="text-xl leading-none mb-1">{stats.icon}</div>
+                         <div className="text-[8px] font-bold font-display leading-none" style={{ color: count > 0 ? stats.color : '#64748b' }}>
+                            {stats.name}
+                         </div>
+                         
+                         {/* Count Badge */}
+                         {count > 0 && (
+                             <div className="absolute -top-1.5 -right-1.5 bg-white text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                                 {count}
+                             </div>
+                         )}
+                     </button>
+                 );
+             })}
         </div>
       </div>
     </div>
