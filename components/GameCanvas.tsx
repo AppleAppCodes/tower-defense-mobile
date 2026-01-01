@@ -606,97 +606,218 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
 };
 
 const drawEnemySprite = (ctx: CanvasRenderingContext2D, enemy: Enemy, era: number, gameTime: number) => {
-    // NOTE: Context is already translated, rotated, and optionally FLIPPED (scaled).
-    // Just draw the body. Shadows and HP bars are drawn in Screen Space in the main loop to avoid artifacts.
-    
-    // Animation bob
-    const bob = Math.sin(gameTime * 0.5) * 2;
+    // Context is translated to enemy position and rotated to face direction.
+    // It may be flipped vertically (scale(1, -1)) if moving left
 
-    // ENEMY BODY
-    // ERA 0: STONE AGE
+    const bob = Math.sin(gameTime * 0.2) * 2;
+    const walkCycle = Math.sin(gameTime * 0.4); // -1 to 1
+
+    // ERA 0: STONE AGE (Primitive, Organic)
     if (era === 0) {
         if (enemy.type === EnemyType.TANK) {
-            // MAMMOTH - Rounder body to prevent squashed look during rotation
-            ctx.fillStyle = '#57534e'; // Fur
-            ctx.beginPath(); ctx.ellipse(0, 0, 14, 13, 0, 0, Math.PI*2); ctx.fill(); // Almost circle body
-            ctx.fillStyle = '#78350f'; // Head
-            ctx.beginPath(); ctx.arc(10, 0, 7, 0, Math.PI*2); ctx.fill();
-            // Tusks
-            ctx.strokeStyle = '#e5e5e5'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(12, 3); ctx.quadraticCurveTo(18, 6, 18, -2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(12, -3); ctx.quadraticCurveTo(18, -6, 18, 2); ctx.stroke();
+            // ================== MAMMOTH ==================
+            // Big furry body
+            ctx.fillStyle = '#4a3b2a'; // Dark Fur
+            // Hairy outline effect by drawing multiple circles or a jagged path? Keep it performant: Ellipse
+            ctx.beginPath(); ctx.ellipse(0, 0, 16, 14, 0, 0, Math.PI*2); ctx.fill();
+            
+            // Head (Hump)
+            ctx.beginPath(); ctx.arc(8, -4, 10, 0, Math.PI*2); ctx.fill();
+
+            // Tusks (White, curved)
+            ctx.strokeStyle = '#e5e5e5'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(10, 2); ctx.quadraticCurveTo(20, 10, 18, -6); ctx.stroke(); // Right
+            ctx.beginPath(); ctx.moveTo(10, -2); ctx.quadraticCurveTo(20, -10, 18, 6); ctx.stroke(); // Left (behind perspective? just simple here)
+
+            // Trunk
+            ctx.strokeStyle = '#4a3b2a'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(14, 0); ctx.quadraticCurveTo(22, 0, 20, -8 * Math.sin(gameTime * 0.1)); ctx.stroke();
+
+            // Legs (Stumpy)
+            ctx.fillStyle = '#3e3123';
+            ctx.beginPath(); ctx.arc(-8, 8 + bob*0.5, 4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(8, 8 - bob*0.5, 4, 0, Math.PI*2); ctx.fill();
+
         } else if (enemy.type === EnemyType.FAST) {
-            // RAPTOR - Taller body to avoid thin line look
+            // ================== RAPTOR ==================
+            // Lean, mean, green
             ctx.fillStyle = '#65a30d'; 
-            ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.lineTo(-6, -8); ctx.fill(); // Taller tail/back
-            ctx.beginPath(); ctx.arc(8, 0, 4, 0, Math.PI*2); ctx.fill(); // Head
-            // Legs moving
-            ctx.strokeStyle = '#4d7c0f'; ctx.lineWidth=2;
-            ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, 6 + bob); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(-4, 2); ctx.lineTo(-4, 6 - bob); ctx.stroke();
+            
+            // Tail
+            ctx.beginPath(); ctx.moveTo(-6, 0); ctx.quadraticCurveTo(-18, -2 + bob, -22, 2); ctx.lineTo(-6, 4); ctx.fill();
+
+            // Body
+            ctx.beginPath(); ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI*2); ctx.fill();
+            
+            // Neck & Head
+            ctx.beginPath(); ctx.moveTo(6, -2); ctx.quadraticCurveTo(12, -8, 16, -6); ctx.lineTo(18, 0); ctx.lineTo(10, 4); ctx.fill();
+            
+            // Eye
+            ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(14, -3, 1.5, 0, Math.PI*2); ctx.fill();
+
+            // Legs (Running)
+            ctx.strokeStyle = '#4d7c0f'; ctx.lineWidth = 2;
+            // Back Leg
+            ctx.beginPath(); ctx.moveTo(-4, 4); ctx.lineTo(-8 + walkCycle*5, 12); ctx.stroke();
+            // Front Leg
+            ctx.beginPath(); ctx.moveTo(4, 4); ctx.lineTo(8 - walkCycle*5, 12); ctx.stroke();
+
         } else {
-            // CAVE MAN
-            ctx.fillStyle = '#fcd34d'; // Skin
-            ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
-            // Shoulders - Rounder
-            ctx.fillStyle = '#78350f'; // Fur
-            ctx.beginPath(); ctx.ellipse(-2, 0, 8, 7, 0, 0, Math.PI*2); ctx.fill();
+            // ================== BARBARIAN ==================
+            // Skin
+            ctx.fillStyle = '#fcd34d'; 
+            ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill(); // Head
+            
+            // Body
+            ctx.fillStyle = '#fcd34d'; 
+            ctx.fillRect(-4, -2, 8, 10);
+            
+            // Fur Tunic
+            ctx.fillStyle = '#78350f';
+            ctx.beginPath(); ctx.moveTo(-5, 2); ctx.lineTo(5, 2); ctx.lineTo(6, 10); ctx.lineTo(0, 8); ctx.lineTo(-6, 10); ctx.fill();
+            
+            // Hair (Wild)
+            ctx.fillStyle = '#451a03';
+            ctx.beginPath(); ctx.arc(0, -2, 7, Math.PI, 0); ctx.fill();
+            
             // Club
             ctx.strokeStyle = '#5c2b08'; ctx.lineWidth=3;
-            ctx.beginPath(); ctx.moveTo(2, 4); ctx.lineTo(10 + bob, 8); ctx.stroke();
+            const swing = Math.sin(gameTime * 0.3);
+            ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(12, -6 + swing*4); ctx.stroke();
+            ctx.fillStyle = '#5c2b08'; ctx.beginPath(); ctx.arc(13, -7 + swing*4, 3, 0, Math.PI*2); ctx.fill();
         }
     }
-    // ERA 1: CASTLE AGE
+    // ERA 1: CASTLE AGE (Metal, Heraldry)
     else if (era === 1) {
         if (enemy.type === EnemyType.TANK) {
-            // BATTERING RAM
-            ctx.fillStyle = '#78350f';
-            ctx.fillRect(-14, -10, 28, 20); // Taller
-            ctx.fillStyle = '#92400e'; 
-            ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(14, 0); ctx.stroke();
-            // Ram head
-            ctx.fillStyle = '#1e293b';
-            ctx.beginPath(); ctx.arc(14, 0, 6, 0, Math.PI*2); ctx.fill();
+            // ================== SIEGE RAM ==================
+            // Roof
+            ctx.fillStyle = '#78350f'; // Wood
+            ctx.beginPath(); ctx.moveTo(-16, 6); ctx.lineTo(-16, -6); ctx.lineTo(10, -6); ctx.lineTo(10, 6); ctx.fill();
+            // Wood Grain details
+            ctx.strokeStyle = '#451a03'; ctx.lineWidth=1;
+            ctx.beginPath(); ctx.moveTo(-10, -6); ctx.lineTo(-10, 6); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(0, 6); ctx.stroke();
+
+            // Ram Head (Iron)
+            ctx.fillStyle = '#334155';
+            ctx.beginPath(); ctx.moveTo(10, -4); ctx.lineTo(18, -2); ctx.lineTo(18, 2); ctx.lineTo(10, 4); ctx.fill();
+            
+            // Wheels
+            ctx.fillStyle = '#171717';
+            ctx.beginPath(); ctx.arc(-8, 8, 4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(4, 8, 4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-8, -8, 4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(4, -8, 4, 0, Math.PI*2); ctx.fill();
+
         } else if (enemy.type === EnemyType.FAST) {
-            // HORSE - Rounder
+            // ================== KNIGHT CAVALRY ==================
+            // Horse Body
             ctx.fillStyle = '#713f12'; 
-            ctx.beginPath(); ctx.ellipse(0, 0, 12, 10, 0, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(10, 0, 5, 0, Math.PI*2); ctx.fill(); 
-        } else {
-            // KNIGHT
+            ctx.beginPath(); ctx.ellipse(0, 2, 12, 6, 0, 0, Math.PI*2); ctx.fill();
+            // Horse Head
+            ctx.beginPath(); ctx.moveTo(8, 0); ctx.quadraticCurveTo(12, -8, 16, -4); ctx.lineTo(14, 2); ctx.fill();
+            
+            // Rider (Knight)
             ctx.fillStyle = '#94a3b8'; // Armor
-            ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
-            // Shield
-            ctx.fillStyle = '#1d4ed8'; 
-            ctx.fillRect(-2, -7, 6, 14);
+            ctx.beginPath(); ctx.arc(0, -4, 5, 0, Math.PI*2); ctx.fill();
+            // Plume
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath(); ctx.moveTo(-2, -8); ctx.lineTo(2, -8); ctx.lineTo(4, -2); ctx.fill();
+
+            // Lance
+            ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(2, -2); ctx.lineTo(20, -2); ctx.stroke();
+
+        } else {
+            // ================== FOOT SOLDIER ==================
+            // Armor
+            ctx.fillStyle = '#94a3b8'; 
+            ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill(); // Head/Helm
+            ctx.fillRect(-5, -5, 10, 10); // Body
+            
+            // Shield (Kite)
+            ctx.fillStyle = '#1e3a8a'; // Blue
+            ctx.beginPath(); ctx.moveTo(2, -4); ctx.lineTo(8, -4); ctx.lineTo(5, 6); ctx.fill();
+            // Shield Cross
+            ctx.strokeStyle = '#fff'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(5, -4); ctx.lineTo(5, 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(2, -1); ctx.lineTo(8, -1); ctx.stroke();
+            
+            // Sword Arm
+            ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth=2;
+            const stab = Math.sin(gameTime * 0.5) * 3;
+            ctx.beginPath(); ctx.moveTo(-2, 2); ctx.lineTo(8 + stab, 6); ctx.stroke();
         }
     }
-    // ERA 2: IMPERIAL AGE
+    // ERA 2: IMPERIAL AGE (Industrial, Military)
     else {
         if (enemy.type === EnemyType.TANK) {
-            // TANK
-            ctx.fillStyle = '#166534'; // Green
-            ctx.fillRect(-14, -12, 28, 24); // Fatter
-            ctx.fillStyle = '#064e3b'; // Turret
-            ctx.beginPath(); ctx.arc(-2, 0, 9, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#000'; // Barrel
-            ctx.fillRect(0, -2, 18, 4);
+            // ================== HEAVY TANK ==================
+            // Treads
+            ctx.fillStyle = '#1f2937';
+            ctx.fillRect(-16, -14, 32, 6); // Top Tread
+            ctx.fillRect(-16, 8, 32, 6);   // Bottom Tread
+            // Moving Tread Details
+            ctx.strokeStyle = '#374151'; ctx.lineWidth=2; ctx.setLineDash([2, 4]); ctx.lineDashOffset = -gameTime;
+            ctx.beginPath(); ctx.moveTo(-16, -11); ctx.lineTo(16, -11); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-16, 11); ctx.lineTo(16, 11); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Chassis
+            ctx.fillStyle = '#15803d'; // Army Green
+            ctx.fillRect(-14, -10, 28, 20);
+            
+            // Turret
+            ctx.fillStyle = '#14532d';
+            ctx.beginPath(); ctx.arc(-2, 0, 10, 0, Math.PI*2); ctx.fill();
+            
+            // Barrel
+            ctx.strokeStyle = '#064e3b'; ctx.lineWidth=5;
+            ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(22, 0); ctx.stroke();
+            // Muzzle Brake
+            ctx.fillStyle = '#064e3b';
+            ctx.fillRect(20, -3, 4, 6);
+
         } else if (enemy.type === EnemyType.FAST) {
-            // BUGGY
-            ctx.fillStyle = '#d97706';
-            ctx.fillRect(-8, -8, 16, 16); // Square-ish
-            ctx.fillStyle = '#000'; // Wheels
-            ctx.fillRect(-6, -8, 4, 2); ctx.fillRect(4, -8, 4, 2);
-            ctx.fillRect(-6, 6, 4, 2); ctx.fillRect(4, 6, 4, 2);
+            // ================== ASSAULT BUGGY ==================
+            // Body
+            ctx.fillStyle = '#b45309'; // Sand Camo
+            ctx.beginPath(); ctx.moveTo(-10, -8); ctx.lineTo(10, -6); ctx.lineTo(14, 0); ctx.lineTo(10, 6); ctx.lineTo(-10, 8); ctx.fill();
+            
+            // Roll Cage / Structure
+            ctx.strokeStyle = '#451a03'; ctx.lineWidth=2;
+            ctx.strokeRect(-6, -6, 12, 12);
+            
+            // Wheels
+            ctx.fillStyle = '#171717';
+            ctx.fillRect(-8, -12, 6, 4); ctx.fillRect(6, -12, 6, 4);
+            ctx.fillRect(-8, 8, 6, 4); ctx.fillRect(6, 8, 6, 4);
+
+            // Gunner
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 2); ctx.stroke(); // MG
+
         } else {
-            // SOLDIER
-            ctx.fillStyle = '#3f6212';
+            // ================== MARINE ==================
+            // Helmet
+            ctx.fillStyle = '#3f6212'; 
             ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#111827'; // Helmet
-            ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
-            // Gun
-            ctx.strokeStyle = '#000'; ctx.lineWidth=2;
-            ctx.beginPath(); ctx.moveTo(2, 2); ctx.lineTo(10, 2); ctx.stroke();
+            
+            // Goggles
+            ctx.fillStyle = '#000';
+            ctx.fillRect(2, -3, 6, 2);
+            ctx.fillStyle = '#4ade80'; // Glow
+            ctx.fillRect(3, -3, 2, 2); ctx.fillRect(6, -3, 2, 2);
+
+            // Shoulders/Vest
+            ctx.fillStyle = '#14532d';
+            ctx.beginPath(); ctx.arc(0, 0, 9, Math.PI*0.5, Math.PI*1.5); ctx.fill();
+
+            // Rifle
+            ctx.strokeStyle = '#171717'; ctx.lineWidth=3;
+            ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(14, 4); ctx.stroke();
         }
     }
 };
