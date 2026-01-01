@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText, PerkDrop, ActivePerk, PerkType } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, PERK_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY, THEMES, ERA_DATA } from '../constants';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Palette, X, Check, ArrowUpCircle } from 'lucide-react';
+import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Palette, X, Check, ArrowUpCircle, Lock, HelpCircle } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -104,16 +104,16 @@ const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
                         <path d="M14,22 Q8,24 8,18" stroke="url(#gradSkin)" strokeWidth="3" strokeLinecap="round" />
                     </g>
                 );
-            case TowerType.RAPID: // Thrower (Pile of rocks + Hands)
+            case TowerType.RAPID: // HUNTER (Primitive Archer)
                 return (
                     <g filter="url(#dropShadow)">
-                         {/* Rock Pile */}
-                         <circle cx="14" cy="28" r="5" fill="#78716c" stroke="black" strokeWidth="0.5"/>
-                         <circle cx="26" cy="28" r="5" fill="#78716c" stroke="black" strokeWidth="0.5"/>
-                         <circle cx="20" cy="24" r="5" fill="#a8a29e" stroke="black" strokeWidth="0.5"/>
-                         {/* Hands throwing */}
-                         <path d="M10,14 Q14,8 20,8 Q26,8 30,14" stroke="url(#gradSkin)" strokeWidth="3" strokeLinecap="round" fill="none"/>
-                         <circle cx="20" cy="5" r="3" fill="#a8a29e" />
+                         {/* Body */}
+                         <path d="M16,32 L16,22 Q16,18 20,18 Q24,18 24,22 L24,32" fill="url(#gradWood)" />
+                         {/* Bow */}
+                         <path d="M26,10 Q14,20 26,30" stroke="#5c2b08" strokeWidth="2" fill="none" />
+                         <line x1="26" y1="10" x2="26" y2="30" stroke="#fff" strokeWidth="0.5" />
+                         {/* Head */}
+                         <circle cx="20" cy="14" r="5" fill="url(#gradSkin)" />
                     </g>
                 );
             case TowerType.SNIPER: // Spearman (Hunter with Long Spear)
@@ -363,55 +363,69 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
           ctx.restore(); // End Body
 
       } else if (tower.type === TowerType.RAPID) {
-          // ================== THROWER (Animated) ==================
+          // ================== HUNTER (Bow) ==================
           const isAttacking = timeSinceShot < 10;
-          let armOffset = 0;
-          let handsEmpty = false;
+          let drawString = 0;
           
           if (isAttacking) {
-             // Throw: Reach back, then throw forward
+             // Released: String snaps forward
              const t = timeSinceShot / 10;
-             if (t < 0.3) armOffset = -5; // Cock back
-             else armOffset = (t) * 12; // Throw forward
-             if (t > 0.5) handsEmpty = true;
+             drawString = (1-t) * 2; // Returns to neutral
           } else {
-             // Idle: Hands low/neutral
-             armOffset = 2; 
+             // Idle: Bow relaxed, string vertical
+             // Attacking (cooldown): Pulling back
+             const cooldownPct = Math.min(1, timeSinceShot / tower.cooldown);
+             if (cooldownPct > 0.5) {
+                // Drawing back
+                drawString = (cooldownPct - 0.5) * 2 * 6; // Max draw 6px
+             }
           }
 
-          // Pile of Rocks (Static on ground behind him)
-          ctx.fillStyle = '#57534e';
-          ctx.beginPath(); ctx.arc(-10, 8, 3, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(-12, 4, 4, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(-9, 0, 3, 0, Math.PI*2); ctx.fill();
+          // Feet
+          ctx.fillStyle = '#451a03';
+          ctx.beginPath(); ctx.arc(-6, -4, 4, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(-6, 4, 4, 0, Math.PI*2); ctx.fill();
 
           // Body with Breath
           ctx.save();
           ctx.translate(0, breath * 0.5);
 
           ctx.fillStyle = '#fcd34d'; // Shirtless
-          ctx.beginPath(); ctx.ellipse(0, 0, 8, 8, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(0, 0, 7, 8, 0, 0, Math.PI*2); ctx.fill();
           // Head
           ctx.fillStyle = '#fcd34d';
           ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
 
-          // Arms & Rock
-          ctx.save();
-          const rockX = 4 + armOffset;
-          
-          // Left Arm
+          // Left Arm (Holding Bow)
           ctx.strokeStyle = '#fcd34d'; ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(rockX, -2); ctx.stroke();
-          // Right Arm
-          ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(rockX, 2); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(12, -2); ctx.stroke();
+
+          // Right Arm (Drawing String)
+          ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(8 - drawString, 4); ctx.stroke();
+
+          // THE BOW
+          ctx.save();
+          ctx.translate(14, 0); // Bow center
+          ctx.rotate(Math.PI/2); // Vertical bow relative to facing right
           
-          // Rock held in hand (unless thrown)
-          if (!handsEmpty) {
-              ctx.fillStyle = '#a8a29e';
-              ctx.beginPath(); ctx.arc(rockX + 2, 0, 4, 0, Math.PI*2); ctx.fill();
-          }
-          ctx.restore();
-          ctx.restore();
+          // Bow Stave
+          ctx.strokeStyle = '#5c2b08'; ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-10, 0); 
+          ctx.quadraticCurveTo(-drawString, 4, 10, 0); // Flexes slightly when drawn? Simplified: Static arc, moving string
+          ctx.stroke();
+
+          // String
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-10, 0);
+          ctx.lineTo(0, -drawString); // Pulled back
+          ctx.lineTo(10, 0);
+          ctx.stroke();
+
+          ctx.restore(); // End Bow
+          
+          ctx.restore(); // End Body
 
       } else if (tower.type === TowerType.SNIPER) {
           // ================== SPEARMAN (Animated) ==================
@@ -474,7 +488,7 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
   // --- ERA 1: CASTLE AGE (Archers/Siege) ---
   else if (era === 1) {
       if (tower.type === TowerType.BASIC) {
-          // ARCHER
+          // LONGBOW (Archer)
           // Hood
           ctx.fillStyle = '#1e3a8a'; 
           ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
@@ -485,6 +499,13 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
           ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth=1;
           ctx.beginPath(); ctx.moveTo(4,0); ctx.lineTo(16,0); ctx.stroke();
       } else if (tower.type === TowerType.RAPID) {
+          // CROSSBOW
+           ctx.fillStyle = '#451a03'; // Stock
+           ctx.fillRect(-8, -2, 16, 4);
+           // Bow
+           ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth=3;
+           ctx.beginPath(); ctx.moveTo(6, -8); ctx.quadraticCurveTo(2, 0, 6, 8); ctx.stroke();
+      } else if (tower.type === TowerType.SNIPER) {
           // BALLISTA
           ctx.fillStyle = '#57534e';
           ctx.fillRect(-8, -4, 16, 8); // Body
@@ -494,15 +515,8 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
           // String
           ctx.strokeStyle = '#000'; ctx.lineWidth=1;
           ctx.beginPath(); ctx.moveTo(4, -12); ctx.lineTo(-6, 0); ctx.lineTo(4, 12); ctx.stroke();
-      } else if (tower.type === TowerType.SNIPER) {
-          // CROSSBOW
-           ctx.fillStyle = '#451a03'; // Stock
-           ctx.fillRect(-8, -2, 16, 4);
-           // Bow
-           ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth=3;
-           ctx.beginPath(); ctx.moveTo(6, -8); ctx.quadraticCurveTo(2, 0, 6, 8); ctx.stroke();
       } else {
-          // CATAPULT
+          // MANGONEL / CATAPULT
           ctx.fillStyle = '#78350f';
           ctx.fillRect(-10, -8, 20, 16);
           ctx.fillStyle = '#000';
@@ -885,7 +899,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           state.lives += 5;
           
           triggerHaptic('success');
-          audioService.playWaveStart(); // Fanfare
+          // Important: Play sound based on NEW era
+          audioService.playWaveStart(state.era); 
           setNotification({
               title: "AGE ADVANCED",
               subtitle: `WELCOME TO THE ${ERA_DATA[state.era].name}`,
@@ -948,7 +963,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
          });
          setTimeout(() => setNotification(null), 3500);
     } else {
-         audioService.playWaveStart();
+         // Pass current ERA to audio service for context-aware sound
+         audioService.playWaveStart(gameStateRef.current.era);
     }
 
     const count = 5 + Math.floor(waveNum * 1.5);
@@ -1861,17 +1877,32 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             </button>
             <div className="w-[1px] h-[80%] bg-white/10" />
             <div className="flex gap-1 overflow-x-auto h-full items-center scrollbar-hide px-1 w-full">
-                {Object.values(TOWER_TYPES).map(tower => (
-                    <button
-                        key={tower.type}
-                        onClick={() => { setSelectedTowerType(selectedTowerType === tower.type ? null : tower.type); setSelectedPlacedTowerId(null); triggerHaptic('light'); }}
-                        className={`min-w-[64px] h-[90%] rounded-md border flex flex-col items-center justify-center gap-0.5 transition-all shrink-0 relative
-                            ${selectedTowerType === tower.type ? 'border-yellow-500 bg-yellow-500/10' : 'border-white/5 bg-black/20 hover:bg-black/40'}`}
-                    >
-                        <div className="w-8 h-8"><TowerIcon type={tower.type} era={uiState.era} /></div>
-                        <div className="text-[9px] text-[#fbbf24] font-mono font-bold">${tower.cost}</div>
-                    </button>
-                ))}
+                {Object.values(TOWER_TYPES).map(tower => {
+                    // Check availability in current Era
+                    const currentEraData = ERA_DATA[uiState.era];
+                    const isUnlocked = currentEraData.availableTowers ? currentEraData.availableTowers.includes(tower.type) : true;
+
+                    if (!isUnlocked) {
+                        return (
+                            <div key={tower.type} className="min-w-[64px] h-[90%] rounded-md border border-white/5 bg-black/40 flex flex-col items-center justify-center gap-1 shrink-0 opacity-50 cursor-not-allowed">
+                                <HelpCircle size={20} className="text-slate-600" />
+                                <div className="text-[9px] text-slate-600 font-mono font-bold">???</div>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <button
+                            key={tower.type}
+                            onClick={() => { setSelectedTowerType(selectedTowerType === tower.type ? null : tower.type); setSelectedPlacedTowerId(null); triggerHaptic('light'); }}
+                            className={`min-w-[64px] h-[90%] rounded-md border flex flex-col items-center justify-center gap-0.5 transition-all shrink-0 relative
+                                ${selectedTowerType === tower.type ? 'border-yellow-500 bg-yellow-500/10' : 'border-white/5 bg-black/20 hover:bg-black/40'}`}
+                        >
+                            <div className="w-8 h-8"><TowerIcon type={tower.type} era={uiState.era} /></div>
+                            <div className="text-[9px] text-[#fbbf24] font-mono font-bold">${tower.cost}</div>
+                        </button>
+                    );
+                })}
             </div>
         </div>
 

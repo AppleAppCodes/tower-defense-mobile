@@ -12,7 +12,8 @@ export const ERA_DATA = [
   {
     name: "STONE AGE",
     color: "#d97706", // Amber
-    maxExp: 500,
+    maxExp: 250, 
+    availableTowers: [TowerType.BASIC, TowerType.RAPID, TowerType.SNIPER], // Only 3 towers
     towerVisuals: {
       material: "#78350f", // Wood
       accent: "#a8a29e", // Stone
@@ -20,10 +21,10 @@ export const ERA_DATA = [
     },
     towerNames: {
       [TowerType.BASIC]: "Slinger",
-      [TowerType.RAPID]: "Thrower",
+      [TowerType.RAPID]: "Hunter", 
       [TowerType.SNIPER]: "Spearman",
-      [TowerType.AOE]: "Rock Pile",
-      [TowerType.LASER]: "Shaman", // Magic
+      [TowerType.AOE]: "Rock Trap",
+      [TowerType.LASER]: "Shaman", 
       [TowerType.FROST]: "Ice Spirit",
       [TowerType.SHOCK]: "Storm Totem",
       [TowerType.MISSILE]: "Bee Hive"
@@ -33,19 +34,20 @@ export const ERA_DATA = [
     name: "CASTLE AGE",
     color: "#64748b", // Slate
     maxExp: 1500,
+    availableTowers: [TowerType.BASIC, TowerType.RAPID, TowerType.SNIPER, TowerType.AOE, TowerType.FROST], // Adds AOE + Frost
     towerVisuals: {
       material: "#94a3b8", // Stone Brick
       accent: "#1e3a8a", // Blue Banner
       projectile: "ARROW"
     },
     towerNames: {
-      [TowerType.BASIC]: "Archer",
-      [TowerType.RAPID]: "Ballista",
-      [TowerType.SNIPER]: "Crossbow",
-      [TowerType.AOE]: "Catapult",
+      [TowerType.BASIC]: "Longbow",
+      [TowerType.RAPID]: "Crossbow",
+      [TowerType.SNIPER]: "Ballista",
+      [TowerType.AOE]: "Mangonel",
       [TowerType.LASER]: "Mage Tower",
       [TowerType.FROST]: "Frost Mage",
-      [TowerType.SHOCK]: "Tesla Coil (Anachronism)", // Keeping funny
+      [TowerType.SHOCK]: "Tesla Coil (Anachronism)", 
       [TowerType.MISSILE]: "Fire Works"
     }
   },
@@ -53,6 +55,7 @@ export const ERA_DATA = [
     name: "IMPERIAL AGE",
     color: "#dc2626", // Red
     maxExp: 5000,
+    availableTowers: Object.values(TowerType), // All Unlocked
     towerVisuals: {
       material: "#1e293b", // Metal
       accent: "#f59e0b", // Gold/Caution
