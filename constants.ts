@@ -4,8 +4,16 @@ import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition, GameTheme, 
 // Portrait resolution
 export const CANVAS_WIDTH = 400;
 export const CANVAS_HEIGHT = 800;
-export const GRID_SIZE = 50; // Increased from 40 to 50 for chunkier visuals
+export const GRID_SIZE = 50; 
 export const AUTO_START_DELAY = 600; 
+
+// --- ASSET MAPPING ---
+// Reverted to empty to force procedural rendering
+export const ASSETS = {
+    towers: {},
+    enemies: {},
+    projectiles: {}
+};
 
 // --- ERA CONFIGURATION ---
 export const ERA_DATA = [
@@ -13,7 +21,7 @@ export const ERA_DATA = [
     name: "STONE AGE",
     color: "#d97706", // Amber
     maxExp: 250, 
-    availableTowers: [TowerType.BASIC, TowerType.RAPID, TowerType.SNIPER], // Only 3 towers
+    availableTowers: [TowerType.BASIC, TowerType.RAPID, TowerType.SNIPER, TowerType.AOE], 
     towerVisuals: {
       material: "#78350f", // Wood
       accent: "#a8a29e", // Stone
@@ -34,7 +42,6 @@ export const ERA_DATA = [
     name: "CASTLE AGE",
     color: "#64748b", // Slate
     maxExp: 1500,
-    // FIXED: Added LASER to fill the gap before FROST in the UI menu
     availableTowers: [TowerType.BASIC, TowerType.RAPID, TowerType.SNIPER, TowerType.AOE, TowerType.LASER, TowerType.FROST], 
     towerVisuals: {
       material: "#94a3b8", // Stone Brick
@@ -46,9 +53,9 @@ export const ERA_DATA = [
       [TowerType.RAPID]: "Crossbow",
       [TowerType.SNIPER]: "Ballista",
       [TowerType.AOE]: "Mangonel",
-      [TowerType.LASER]: "Mage Tower", // Reintroduced as Mage Tower
+      [TowerType.LASER]: "Mage Tower",
       [TowerType.FROST]: "Frost Mage",
-      [TowerType.SHOCK]: "Tesla Coil (Anachronism)", 
+      [TowerType.SHOCK]: "Tesla Coil", 
       [TowerType.MISSILE]: "Fire Works"
     }
   },
@@ -80,7 +87,7 @@ export const MAPS: MapDefinition[] = [
     id: 'plains',
     name: 'Green Plains',
     difficulty: 'EASY',
-    waypoints: [ // Adjusted for 50px Grid (400x800)
+    waypoints: [ 
       { x: 200, y: 0 },
       { x: 200, y: 150 },
       { x: 100, y: 150 },
@@ -97,7 +104,7 @@ export const MAPS: MapDefinition[] = [
     id: 'desert',
     name: 'Dusty Canyon',
     difficulty: 'MEDIUM',
-    waypoints: [ // Adjusted for 50px Grid
+    waypoints: [ 
       { x: 50, y: 0 },
       { x: 50, y: 200 },
       { x: 350, y: 200 },
@@ -115,22 +122,22 @@ export const THEMES: GameTheme[] = [
     id: 'default',
     name: 'Green Valley',
     price: 0,
-    background: '#3f6212', // Dark Green Grass
+    background: '#3f6212', 
     grid: 'rgba(255, 255, 255, 0.05)',
-    pathOuter: '#33281d', // Dark dirt
-    pathInner: '#d6c4a0', // Sand/Dirt path
-    pathGlow: 'rgba(0,0,0,0.2)', // Shadow instead of glow
-    scanline: 'rgba(255, 255, 255, 0.02)', // Sun rays
+    pathOuter: '#33281d', 
+    pathInner: '#d6c4a0', 
+    pathGlow: 'rgba(0,0,0,0.2)', 
+    scanline: 'rgba(255, 255, 255, 0.02)', 
     uiAccent: '#a3e635'
   },
   {
     id: 'snow',
     name: 'Winter Land',
     price: 100,
-    background: '#cbd5e1', // Snow
+    background: '#cbd5e1', 
     grid: 'rgba(0, 0, 0, 0.05)',
     pathOuter: '#475569',
-    pathInner: '#f1f5f9', // Ice path
+    pathInner: '#f1f5f9', 
     pathGlow: 'rgba(148, 163, 184, 0.5)',
     scanline: 'rgba(255, 255, 255, 0.1)',
     uiAccent: '#38bdf8'
@@ -142,7 +149,7 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Basic',
     type: TowerType.BASIC,
     cost: 50,
-    range: 140, // Increased slightly due to larger grid
+    range: 140, 
     damage: 20,
     cooldown: 40,
   },
@@ -205,7 +212,7 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
 };
 
 export const ENEMY_STATS: Record<EnemyType, { maxHp: number; speed: number; reward: number; expReward: number; color: string; radius: number }> = {
-  [EnemyType.NORMAL]: { maxHp: 80, speed: 1.0, reward: 10, expReward: 15, color: '#94a3b8', radius: 16 }, // Larger radius
+  [EnemyType.NORMAL]: { maxHp: 80, speed: 1.0, reward: 10, expReward: 15, color: '#94a3b8', radius: 16 }, 
   [EnemyType.FAST]: { maxHp: 40, speed: 2.0, reward: 15, expReward: 10, color: '#a3e635', radius: 12 },   
   [EnemyType.TANK]: { maxHp: 300, speed: 0.6, reward: 35, expReward: 50, color: '#475569', radius: 24 },   
   [EnemyType.BOSS]: { maxHp: 3000, speed: 0.4, reward: 250, expReward: 500, color: '#ef4444', radius: 36 }, 
