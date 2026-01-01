@@ -55,7 +55,7 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
   );
 
   switch (type) {
-    case TowerType.BASIC: // Sentry - Dual Barrel
+    case TowerType.BASIC: // Sentry
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
           <BasePlate />
@@ -65,7 +65,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <circle cx="20" cy="20" r="4" fill={color} />
         </svg>
       );
-
     case TowerType.RAPID: // Gatling
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
@@ -77,7 +76,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <circle cx="14" cy="18" r="3" fill="#1e293b" />
         </svg>
       );
-
     case TowerType.SNIPER: // Railgun
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
@@ -89,7 +87,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <circle cx="20" cy="30" r="5" fill="#0ea5e9" />
         </svg>
       );
-
     case TowerType.AOE: // Howitzer
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
@@ -99,7 +96,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <rect x="18" y="4" width="4" height="4" fill="#000" />
         </svg>
       );
-
     case TowerType.LASER: // Prism
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
@@ -109,7 +105,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <path d="M20 8 L26 20 L20 32 L14 20 Z" fill={color} stroke="white" strokeWidth="0.5" />
         </svg>
       );
-
     case TowerType.FROST: // Cryo
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
@@ -121,7 +116,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <circle cx="20" cy="20" r="4" fill="#fff" />
         </svg>
       );
-
     case TowerType.SHOCK: // Tesla
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
@@ -131,7 +125,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <circle cx="20" cy="20" r="4" fill="#fff" className="animate-pulse" />
         </svg>
       );
-
     case TowerType.MISSILE: // Swarm
       return (
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="drop-shadow-md w-full h-full">
@@ -147,7 +140,6 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
           <circle cx="25" cy="25" r="1.5" fill={color} />
         </svg>
       );
-      
     default:
       return <div className="w-10 h-10 rounded-full bg-gray-500" />;
   }
@@ -157,12 +149,10 @@ const MapPreviewSVG = ({ map, activeThemeId }: { map: MapDefinition, activeTheme
     const theme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
     const scaleX = 100 / CANVAS_WIDTH;
     const scaleY = 60 / CANVAS_HEIGHT;
-    
     let pathData = `M ${map.waypoints[0].x * scaleX} ${map.waypoints[0].y * scaleY}`;
     for (let i = 1; i < map.waypoints.length; i++) {
         pathData += ` L ${map.waypoints[i].x * scaleX} ${map.waypoints[i].y * scaleY}`;
     }
-
     return (
         <svg width="100" height="60" viewBox="0 0 100 60" style={{ backgroundColor: theme.background }} className="rounded border border-white/20 shadow-inner">
             <path d={pathData} stroke={theme.uiAccent} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -220,15 +210,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const preventDefault = (e: TouchEvent) => {
         if (e.cancelable) e.preventDefault();
     };
-    
     canvas.addEventListener('touchmove', preventDefault, { passive: false });
     canvas.addEventListener('touchstart', preventDefault, { passive: false });
     canvas.addEventListener('touchend', preventDefault, { passive: false });
-
     return () => {
         canvas.removeEventListener('touchmove', preventDefault);
         canvas.removeEventListener('touchstart', preventDefault);
@@ -315,14 +302,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   const startWave = useCallback((waveNum: number) => {
-    const isBossWave = waveNum >= 10 && waveNum % 10 === 0;
+    // UPDATED: Bosses appear every 5 rounds
+    const isBossWave = waveNum > 0 && waveNum % 5 === 0;
     
     if (isBossWave) {
          audioService.playAlarm();
          triggerHaptic('heavy');
          setNotification({
-             title: "BOSS WARNING",
-             subtitle: "MASSIVE SIGNAL DETECTED",
+             title: "BOSS DETECTED",
+             subtitle: "CLASS-5 LEVIATHAN INBOUND",
              color: "text-red-500",
              type: 'boss'
          });
@@ -338,7 +326,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       let type = EnemyType.NORMAL;
       if (waveNum > 2 && i % 3 === 0) type = EnemyType.FAST;
       if (waveNum > 4 && i % 5 === 0) type = EnemyType.TANK;
-      if (waveNum % 10 === 0 && i === count - 1) type = EnemyType.BOSS;
+      // Spawn Boss last on boss waves
+      if (isBossWave && i === count - 1) type = EnemyType.BOSS;
       
       newQueue.push({ type, delay: i * 60 });
     }
@@ -485,12 +474,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             const nextEnemy = spawnQueue.shift();
             if (nextEnemy) {
               const stats = ENEMY_STATS[nextEnemy.type];
+              // INCREASED DIFFICULTY SCALING: 35% HP increase per wave instead of 20%
+              const waveMultiplier = state.wave * 0.35;
               enemiesRef.current.push({
                 id: Math.random().toString(36),
                 position: { ...currentMap.waypoints[0] }, // Spawn at current map start
                 type: nextEnemy.type,
-                hp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
-                maxHp: stats.maxHp + (state.wave * stats.maxHp * 0.2),
+                hp: stats.maxHp + (stats.maxHp * waveMultiplier),
+                maxHp: stats.maxHp + (stats.maxHp * waveMultiplier),
                 speed: stats.speed,
                 pathIndex: 0,
                 distanceTraveled: 0,
@@ -789,19 +780,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.restore();
     
     // --- 3. LEVEL INDICATORS (Overlay) ---
-    // Draw these AFTER restore so they don't rotate with turret (stay fixed relative to base)
-    // Or maybe they should rotate? Let's keep them on the base (non-rotating) for readability.
-    // Actually, drawing them on the base earlier is better, but let's overlay them now on top of everything
-    // but positioned relative to tower center
-    
     ctx.save();
     ctx.translate(tower.position.x, tower.position.y);
     // Draw level dots on the back side
     ctx.fillStyle = '#fbbf24'; // Gold
     ctx.shadowColor = '#fbbf24';
     ctx.shadowBlur = 4;
-    
-    // Position dots in a row below/behind the tower
     const startX = -((tower.level - 1) * 4);
     for(let i=0; i<tower.level; i++) {
         ctx.beginPath();
@@ -905,7 +889,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         }
     });
 
-    // 5. Enemies
+    // 5. Enemies (NEW COMPLEX RENDERER)
     enemiesRef.current.forEach(enemy => {
         const target = currentMap.waypoints[enemy.pathIndex + 1];
         let angle = 0;
@@ -918,37 +902,112 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         ctx.rotate(angle);
 
         // Enemy Glow
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.shadowColor = enemy.color;
         
         ctx.fillStyle = enemy.color;
         
-        // Simple shape drawing based on type
-        ctx.beginPath();
+        // --- COMPLEX DRAWING LOGIC ---
         if (enemy.type === EnemyType.BOSS) {
-            ctx.arc(0, 0, enemy.radius, 0, Math.PI*2);
+            // "THE LEVIATHAN" - Rotating Dreadnought
+            const spin = gameStateRef.current.gameTime * 0.05;
+            
+            // Outer Shield Ring
+            ctx.save();
+            ctx.rotate(spin);
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for(let k=0; k<6; k++) {
+                const a = (k * Math.PI * 2) / 6;
+                ctx.moveTo(Math.cos(a)*28, Math.sin(a)*28);
+                ctx.lineTo(Math.cos(a)*34, Math.sin(a)*34);
+            }
+            ctx.stroke();
+            ctx.beginPath(); ctx.arc(0,0, 28, 0, Math.PI*2); ctx.stroke();
+            ctx.restore();
+
+            // Inner Core
+            ctx.fillStyle = '#0f172a'; // Dark center
+            ctx.beginPath(); ctx.arc(0,0, 20, 0, Math.PI*2); ctx.fill();
+            
+            // Pulsing Reactor
+            ctx.fillStyle = enemy.color;
+            const pulse = 15 + Math.sin(gameStateRef.current.gameTime * 0.2) * 5;
+            ctx.beginPath(); 
+            // Skull shape-ish
+            ctx.moveTo(-10, -10); ctx.lineTo(10, -10); ctx.lineTo(8, 10); ctx.lineTo(-8, 10);
+            ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fillStyle="#fff"; ctx.fill();
+
+        } else if (enemy.type === EnemyType.TANK) {
+            // "THE BEHEMOTH" - Heavy Armor Square
+            ctx.fillStyle = '#334155'; // Dark Slate Base
+            ctx.fillRect(-16, -16, 32, 32);
+            ctx.fillStyle = enemy.color;
+            // Armor Plates
+            ctx.fillRect(-14, -14, 10, 28); // Left track
+            ctx.fillRect(4, -14, 10, 28); // Right track
+            // Turret
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath(); ctx.arc(0,0, 8, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 0); ctx.stroke();
+
         } else if (enemy.type === EnemyType.FAST) {
-             ctx.moveTo(enemy.radius, 0);
-             ctx.lineTo(-enemy.radius, -enemy.radius/2);
-             ctx.lineTo(-enemy.radius, enemy.radius/2);
+            // "THE VIPER" - Fast Jet
+            ctx.beginPath();
+            ctx.moveTo(14, 0); // Nose
+            ctx.lineTo(-10, -10); // Left Wing
+            ctx.lineTo(-4, 0); // Center back
+            ctx.lineTo(-10, 10); // Right Wing
+            ctx.closePath();
+            ctx.fill();
+            // Engine Glow
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(-6, 0, 2, 0, Math.PI*2); ctx.fill();
+
         } else {
-             ctx.arc(0, 0, enemy.radius, 0, Math.PI*2);
+            // "THE SCARAB" - Normal Unit
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-6, -8);
+            ctx.lineTo(-2, 0);
+            ctx.lineTo(-6, 8);
+            ctx.closePath();
+            ctx.fill();
+            // Eye
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(2, 0, 3, 0, Math.PI*2); ctx.fill();
         }
-        ctx.fill();
+
         ctx.shadowBlur = 0;
-
-        // Engine Trail effect
-        if (gameStateRef.current.gameTime % 4 === 0) {
-            // Add trail particle implicitly by drawing small dots behind
-             ctx.fillStyle = 'rgba(255,255,255,0.5)';
-             ctx.fillRect(-enemy.radius - 4, -2, 4, 4);
-        }
-
         ctx.restore();
 
-        // HP Bar (Floating)
+        // --- HEALTH BARS ---
         const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
-        if (hpPct < 1) {
+        
+        // Boss HP Bar is bigger and has text
+        if (enemy.type === EnemyType.BOSS) {
+            ctx.save();
+            ctx.translate(enemy.position.x, enemy.position.y - 45);
+            // Bar Background
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(-30, 0, 60, 6);
+            // Bar Fill
+            ctx.fillStyle = '#ef4444';
+            ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 5;
+            ctx.fillRect(-29, 1, 58 * hpPct, 4);
+            // Skull Icon
+            ctx.font = "10px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "center";
+            ctx.shadowBlur = 0;
+            ctx.fillText("☠ BOSS", 0, -5);
+            ctx.restore();
+        } else if (hpPct < 1) {
+            // Normal HP Bar
             ctx.fillStyle = '#0f172a';
             ctx.fillRect(enemy.position.x - 10, enemy.position.y - 20, 20, 3);
             ctx.fillStyle = hpPct > 0.5 ? '#4ade80' : '#f87171';
@@ -959,7 +1018,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         if (enemy.frozen > 0) {
             ctx.strokeStyle = '#67e8f9';
             ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(enemy.position.x, enemy.position.y, enemy.radius + 2, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(enemy.position.x, enemy.position.y, enemy.radius + 4, 0, Math.PI * 2); ctx.stroke();
         }
     });
 

@@ -147,7 +147,6 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     color: '#dc2626', // Red 600
     description: 'Explosive area damage.'
   },
-  // --- NEW WEAPONS ---
   [TowerType.LASER]: {
     name: 'Prism',
     type: TowerType.LASER,
@@ -190,11 +189,12 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
   }
 };
 
+// SIGNIFICANTLY INCREASED DIFFICULTY
 export const ENEMY_STATS: Record<EnemyType, { maxHp: number; speed: number; reward: number; color: string; radius: number }> = {
-  [EnemyType.NORMAL]: { maxHp: 60, speed: 2, reward: 10, color: '#94a3b8', radius: 12 }, // Slate 400
-  [EnemyType.FAST]: { maxHp: 30, speed: 4, reward: 15, color: '#a3e635', radius: 10 },   // Lime 400
-  [EnemyType.TANK]: { maxHp: 200, speed: 1, reward: 30, color: '#475569', radius: 16 },   // Slate 600
-  [EnemyType.BOSS]: { maxHp: 1000, speed: 0.5, reward: 100, color: '#7e22ce', radius: 24 }, // Purple 700
+  [EnemyType.NORMAL]: { maxHp: 85, speed: 2, reward: 10, color: '#94a3b8', radius: 14 }, 
+  [EnemyType.FAST]: { maxHp: 45, speed: 4.5, reward: 15, color: '#a3e635', radius: 10 },   
+  [EnemyType.TANK]: { maxHp: 350, speed: 0.8, reward: 35, color: '#475569', radius: 18 },   
+  [EnemyType.BOSS]: { maxHp: 3500, speed: 0.4, reward: 250, color: '#ef4444', radius: 32 }, 
 };
 
 export const INITIAL_STATE = {
