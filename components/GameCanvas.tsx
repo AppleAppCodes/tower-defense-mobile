@@ -147,17 +147,149 @@ const TowerIcon = ({ type, color }: { type: TowerType; color: string }) => {
 
 const MapPreviewSVG = ({ map, activeThemeId }: { map: MapDefinition, activeThemeId: string }) => {
     const theme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
-    const scaleX = 100 / CANVAS_WIDTH;
-    const scaleY = 60 / CANVAS_HEIGHT;
+    const scaleX = 60 / CANVAS_WIDTH; // Adjusted for Portrait preview (60px wide)
+    const scaleY = 100 / CANVAS_HEIGHT; // Adjusted for Portrait preview (100px tall)
     let pathData = `M ${map.waypoints[0].x * scaleX} ${map.waypoints[0].y * scaleY}`;
     for (let i = 1; i < map.waypoints.length; i++) {
         pathData += ` L ${map.waypoints[i].x * scaleX} ${map.waypoints[i].y * scaleY}`;
     }
     return (
-        <svg width="100" height="60" viewBox="0 0 100 60" style={{ backgroundColor: theme.background }} className="rounded border border-white/20 shadow-inner">
+        <svg width="60" height="100" viewBox="0 0 60 100" style={{ backgroundColor: theme.background }} className="rounded border border-white/20 shadow-inner">
             <path d={pathData} stroke={theme.uiAccent} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
+};
+
+const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower) => {
+  const config = TOWER_TYPES[tower.type];
+  const color = config.color;
+  
+  // Note: Context is already translated to tower center and rotated
+  
+  switch (tower.type) {
+    case TowerType.BASIC: // Sentry
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-4, -14, 3, 10); // Left barrel
+      ctx.fillRect(1, -14, 3, 10);  // Right barrel
+      
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      // @ts-ignore
+      ctx.roundRect ? ctx.roundRect(-6, -6, 12, 12, 4) : ctx.fillRect(-6, -6, 12, 12); // Fallback
+      ctx.fill();
+      
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
+      break;
+
+    case TowerType.RAPID: // Gatling
+      ctx.fillStyle = '#3f6212';
+      ctx.beginPath();
+      // @ts-ignore
+      ctx.roundRect ? ctx.roundRect(-8, -6, 16, 14, 2) : ctx.fillRect(-8, -6, 16, 14);
+      ctx.fill();
+      
+      ctx.fillStyle = '#a3e635';
+      ctx.fillRect(-2, -14, 4, 8); // Center
+      ctx.fillRect(-7, -12, 3, 6); // Left
+      ctx.fillRect(4, -12, 3, 6); // Right
+      
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath(); ctx.arc(-6, 2, 3, 0, Math.PI*2); ctx.fill();
+      break;
+
+    case TowerType.SNIPER: // Railgun
+      ctx.fillStyle = '#7c2d12';
+      ctx.fillRect(-3, -20, 6, 26);
+      
+      ctx.fillStyle = color;
+      ctx.fillRect(-4, -14, 8, 2);
+      ctx.fillRect(-4, -6, 8, 2);
+      ctx.fillRect(-4, 2, 8, 2);
+      
+      ctx.fillStyle = '#0ea5e9';
+      ctx.beginPath(); ctx.arc(0, 6, 5, 0, Math.PI*2); ctx.fill();
+      break;
+
+    case TowerType.AOE: // Howitzer
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath();
+      ctx.moveTo(-10, -8);
+      ctx.lineTo(10, -8);
+      ctx.lineTo(10, 8);
+      ctx.lineTo(-10, 8);
+      ctx.fill();
+      
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-6, -14, 12, 10);
+      
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-2, -14, 4, 4);
+      break;
+
+    case TowerType.LASER: // Prism
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.moveTo(-8, -10); ctx.lineTo(0, -4); ctx.lineTo(-8, 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(8, -10); ctx.lineTo(0, -4); ctx.lineTo(8, 2); ctx.fill();
+      
+      ctx.fillStyle = color;
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(6, 0); ctx.lineTo(0, 12); ctx.lineTo(-6, 0); ctx.closePath(); 
+      ctx.fill();
+      ctx.stroke();
+      break;
+
+    case TowerType.FROST: // Cryo
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+      
+      ctx.fillStyle = '#0ea5e9';
+      ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(3, -14); ctx.lineTo(-3, -14); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(9, 5); ctx.lineTo(13, 8); ctx.lineTo(8, 10); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-9, 5); ctx.lineTo(-13, 8); ctx.lineTo(-8, 10); ctx.fill();
+      
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
+      break;
+
+    case TowerType.SHOCK: // Tesla
+      ctx.fillStyle = '#854d0e';
+      ctx.fillRect(-6, -6, 12, 12);
+      
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
+      break;
+
+    case TowerType.MISSILE: // Swarm
+      ctx.fillStyle = '#581c87';
+      ctx.beginPath();
+      // @ts-ignore
+      ctx.roundRect ? ctx.roundRect(-10, -10, 20, 20, 4) : ctx.fillRect(-10, -10, 20, 20);
+      ctx.fill();
+      
+      const drawMissile = (x: number, y: number) => {
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI*2); ctx.fill();
+      };
+      drawMissile(-5, -5);
+      drawMissile(5, -5);
+      drawMissile(-5, 5);
+      drawMissile(5, 5);
+      break;
+      
+    default:
+      ctx.fillStyle = '#64748b';
+      ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+  }
 };
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
@@ -851,67 +983,145 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         ctx.stroke();
 
         ctx.rotate(tower.rotation);
-        ctx.fillStyle = config.color;
-        // Simple shape representation
-        ctx.fillRect(-6, -6, 12, 12); // Generic body
-        // Barrel
-        ctx.fillRect(0, -4, 20, 8);
+        
+        // Draw sophisticated tower per type (reusing similar logic to icon but simplified for canvas)
+        drawTower(ctx, tower); // Using the helper function we already have!
         
         ctx.restore();
-
-        // Level dots
-        ctx.fillStyle = '#fbbf24';
-        for(let i=0; i<tower.level; i++) {
-             ctx.beginPath();
-             ctx.arc(-8 + (i * 8), -12, 2, 0, Math.PI * 2);
-             ctx.fill();
-        }
 
         // Selection ring
         if (selectedPlacedTowerId === tower.id) {
             ctx.beginPath();
             ctx.strokeStyle = '#fff';
             ctx.setLineDash([4, 4]);
-            ctx.arc(0, 0, tower.range, 0, Math.PI * 2);
+            ctx.arc(tower.position.x, tower.position.y, tower.range, 0, Math.PI * 2);
             ctx.stroke();
             ctx.setLineDash([]);
             ctx.strokeStyle = '#fbbf24';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(0, 0, 20, 0, Math.PI * 2);
+            ctx.arc(tower.position.x, tower.position.y, 20, 0, Math.PI * 2);
             ctx.stroke();
         }
-        ctx.restore();
     });
 
     // 7. Draw Enemies
     enemiesRef.current.forEach(enemy => {
-        ctx.save();
-        ctx.translate(enemy.position.x, enemy.position.y);
-        ctx.shadowColor = enemy.color;
-        ctx.shadowBlur = 10;
-        ctx.fillStyle = enemy.color;
-        ctx.beginPath();
-        ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        
-        if (enemy.frozen > 0) {
-            ctx.fillStyle = 'rgba(6, 182, 212, 0.6)';
-            ctx.fill();
-            ctx.strokeStyle = '#cffafe';
-            ctx.lineWidth = 1;
-            ctx.stroke();
+        const target = currentMap.waypoints[enemy.pathIndex + 1];
+        let angle = 0;
+        if (target) {
+            angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
         }
 
-        const hpPct = enemy.hp / enemy.maxHp;
-        if (hpPct < 1.0) {
-            ctx.fillStyle = '#334155';
-            ctx.fillRect(-10, -enemy.radius - 8, 20, 4);
-            ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.2 ? '#eab308' : '#ef4444';
-            ctx.fillRect(-10, -enemy.radius - 8, 20 * hpPct, 4);
+        ctx.save();
+        ctx.translate(enemy.position.x, enemy.position.y);
+        ctx.rotate(angle);
+
+        // Enemy Glow
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = enemy.color;
+        ctx.fillStyle = enemy.color;
+        
+        // --- COMPLEX DRAWING LOGIC ---
+        if (enemy.type === EnemyType.BOSS) {
+            // "THE LEVIATHAN" - Rotating Dreadnought
+            const spin = gameStateRef.current.gameTime * 0.05;
+            
+            // Outer Shield Ring
+            ctx.save();
+            ctx.rotate(spin);
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for(let k=0; k<6; k++) {
+                const a = (k * Math.PI * 2) / 6;
+                ctx.moveTo(Math.cos(a)*28, Math.sin(a)*28);
+                ctx.lineTo(Math.cos(a)*34, Math.sin(a)*34);
+            }
+            ctx.stroke();
+            ctx.beginPath(); ctx.arc(0,0, 28, 0, Math.PI*2); ctx.stroke();
+            ctx.restore();
+
+            // Inner Core
+            ctx.fillStyle = '#0f172a'; // Dark center
+            ctx.beginPath(); ctx.arc(0,0, 20, 0, Math.PI*2); ctx.fill();
+            
+            // Pulsing Reactor
+            ctx.fillStyle = enemy.color;
+            ctx.beginPath(); 
+            ctx.moveTo(-10, -10); ctx.lineTo(10, -10); ctx.lineTo(8, 10); ctx.lineTo(-8, 10);
+            ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fillStyle="#fff"; ctx.fill();
+
+        } else if (enemy.type === EnemyType.TANK) {
+            // "THE BEHEMOTH" - Heavy Armor Square
+            ctx.fillStyle = '#334155'; // Dark Slate Base
+            ctx.fillRect(-16, -16, 32, 32);
+            ctx.fillStyle = enemy.color;
+            // Armor Plates
+            ctx.fillRect(-14, -14, 10, 28); // Left track
+            ctx.fillRect(4, -14, 10, 28); // Right track
+            // Turret
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath(); ctx.arc(0,0, 8, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = enemy.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 0); ctx.stroke();
+
+        } else if (enemy.type === EnemyType.FAST) {
+            // "THE VIPER" - Fast Jet
+            ctx.beginPath();
+            ctx.moveTo(14, 0); // Nose
+            ctx.lineTo(-10, -10); // Left Wing
+            ctx.lineTo(-4, 0); // Center back
+            ctx.lineTo(-10, 10); // Right Wing
+            ctx.closePath();
+            ctx.fill();
+            // Engine Glow
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(-6, 0, 2, 0, Math.PI*2); ctx.fill();
+
+        } else {
+            // "THE SCARAB" - Normal Unit
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-6, -8);
+            ctx.lineTo(-2, 0);
+            ctx.lineTo(-6, 8);
+            ctx.closePath();
+            ctx.fill();
+            // Eye
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(2, 0, 3, 0, Math.PI*2); ctx.fill();
         }
+
+        ctx.shadowBlur = 0;
         ctx.restore();
+
+        // --- HEALTH BARS ---
+        const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
+        if (hpPct < 1) {
+            ctx.save();
+            ctx.translate(enemy.position.x, enemy.position.y);
+            const barY = enemy.type === EnemyType.BOSS ? -45 : -20;
+            const barW = enemy.type === EnemyType.BOSS ? 60 : 20;
+            
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(-barW/2, barY, barW, 4);
+            ctx.fillStyle = hpPct > 0.5 ? '#4ade80' : '#f87171';
+            ctx.fillRect(-barW/2, barY, barW * hpPct, 4);
+            ctx.restore();
+        }
+        
+        // Frozen indicator
+        if (enemy.frozen > 0) {
+            ctx.save();
+            ctx.translate(enemy.position.x, enemy.position.y);
+            ctx.strokeStyle = '#67e8f9';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(0, 0, enemy.radius + 4, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        }
     });
 
     // 8. Draw Projectiles

@@ -1,56 +1,57 @@
 import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition, GameTheme, PerkType } from './types';
 
-export const CANVAS_WIDTH = 800;
-export const CANVAS_HEIGHT = 600;
+// CHANGED: Portrait resolution to match mobile screens better and prevent stretching
+export const CANVAS_WIDTH = 400;
+export const CANVAS_HEIGHT = 800; // 1:2 Aspect Ratio (close to 9:16)
 export const GRID_SIZE = 40;
 export const AUTO_START_DELAY = 600; // 10 seconds at 60fps
 
 export const MAPS: MapDefinition[] = [
   {
-    id: 'canyon',
-    name: 'Canyon Run',
+    id: 'valley',
+    name: 'Serpentine',
     difficulty: 'EASY',
     waypoints: [
-      { x: 0, y: 100 },
-      { x: 200, y: 100 },
-      { x: 200, y: 400 },
-      { x: 500, y: 400 },
-      { x: 500, y: 200 },
-      { x: 700, y: 200 },
-      { x: 700, y: 500 },
-      { x: 800, y: 500 },
+      { x: 200, y: 0 },
+      { x: 200, y: 120 },
+      { x: 80, y: 120 },
+      { x: 80, y: 320 },
+      { x: 320, y: 320 },
+      { x: 320, y: 520 },
+      { x: 120, y: 520 },
+      { x: 120, y: 720 },
+      { x: 200, y: 720 },
+      { x: 200, y: 800 },
     ]
   },
   {
-    id: 'omega',
-    name: 'Omega Loop',
+    id: 'loop',
+    name: 'The Knot',
     difficulty: 'MEDIUM',
     waypoints: [
-      { x: 0, y: 300 },
-      { x: 200, y: 300 },
-      { x: 200, y: 100 },
-      { x: 600, y: 100 },
-      { x: 600, y: 500 },
-      { x: 200, y: 500 },
-      { x: 200, y: 300 }, // The Loop closes here near start
-      { x: 800, y: 300 },
+      { x: 40, y: 0 },
+      { x: 40, y: 200 },
+      { x: 360, y: 200 },
+      { x: 360, y: 440 },
+      { x: 40, y: 440 }, // Big loop cross
+      { x: 40, y: 600 },
+      { x: 200, y: 600 },
+      { x: 200, y: 800 },
     ]
   },
   {
-    id: 'zigzag',
-    name: 'Zig Zag',
+    id: 'central',
+    name: 'Core Defence',
     difficulty: 'HARD',
     waypoints: [
-      { x: 40, y: 0 },
-      { x: 40, y: 500 },
-      { x: 200, y: 500 },
-      { x: 200, y: 100 },
-      { x: 360, y: 100 },
-      { x: 360, y: 500 },
-      { x: 520, y: 500 },
-      { x: 520, y: 100 },
-      { x: 680, y: 100 },
-      { x: 680, y: 600 },
+      { x: 200, y: 0 },
+      { x: 200, y: 160 },
+      { x: 360, y: 160 },
+      { x: 360, y: 640 },
+      { x: 40, y: 640 },
+      { x: 40, y: 320 },
+      { x: 200, y: 320 }, // Spiral inward
+      { x: 200, y: 480 },
     ]
   }
 ];
