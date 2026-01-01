@@ -331,6 +331,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   
   // NEW: Perks refs
   const perkDropsRef = useRef<PerkDrop[]>([]);
+  
+  // Separate Ref for Game Logic (Loop) avoiding dependency cycles
+  const activePerksRef = useRef<ActivePerk[]>([]);
+  // State for UI Rendering
   const [activePerks, setActivePerks] = useState<ActivePerk[]>([]);
   
   // INVENTORY SYSTEM
@@ -496,16 +500,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         }
         audioService.playShoot('LASER');
     } else {
-        // Apply Buff
+        // Apply Buff (Damage/Speed)
         const duration = PERK_STATS[type].duration;
-        setActivePerks(prev => {
-            const filtered = prev.filter(p => p.type !== type);
-            return [...filtered, {
-                type: type,
-                endTime: gameStateRef.current.gameTime + duration,
-                duration: duration
-            }];
-        });
+        const newPerk: ActivePerk = {
+            type: type,
+            endTime: gameStateRef.current.gameTime + duration,
+            duration: duration
+        };
+        
+        // Update Ref for Game Logic (remove old same type to "refresh" duration)
+        const filtered = activePerksRef.current.filter(p => p.type !== type);
+        activePerksRef.current = [...filtered, newPerk];
+        
+        // Update State for UI
+        setActivePerks([...activePerksRef.current]);
+        
         audioService.playAlarm(); 
     }
     
@@ -621,11 +630,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         // Animate Scanline
         terrainRef.current.scanline = (terrainRef.current.scanline + 2) % CANVAS_HEIGHT;
 
-        // --- UPDATE ACTIVE PERKS ---
-        setActivePerks(prev => prev.filter(p => {
-             if (state.gameTime >= p.endTime) return false;
-             return true;
-        }));
+        // --- UPDATE ACTIVE PERKS (Using Ref for Stability) ---
+        const now = state.gameTime;
+        const previousLength = activePerksRef.current.length;
+        // Filter expired
+        activePerksRef.current = activePerksRef.current.filter(p => now < p.endTime);
+        
+        // Sync State if changes occurred (Optimization: Only sync on change)
+        if (activePerksRef.current.length !== previousLength) {
+             setActivePerks([...activePerksRef.current]);
+        }
 
         // --- UPDATE PERK DROPS (Disappearing) ---
         for (let i = perkDropsRef.current.length - 1; i >= 0; i--) {
@@ -811,16 +825,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
               tower.rotation = Math.atan2(target.position.y - tower.position.y, target.position.x - tower.position.x);
           }
 
-          // PERK MODIFIERS
-          const isRapid = activePerks.some(p => p.type === PerkType.SPEED);
+          // PERK MODIFIERS - USE REF
+          const isRapid = activePerksRef.current.some(p => p.type === PerkType.SPEED);
           const activeCooldown = isRapid ? tower.cooldown / 2 : tower.cooldown;
 
           if (tower.lastShotFrame + activeCooldown <= state.gameTime) {
             if (target) {
               tower.lastShotFrame = state.gameTime;
               
-              // PERK DAMAGE MODIFIER
-              const isDoubleDmg = activePerks.some(p => p.type === PerkType.DAMAGE);
+              // PERK DAMAGE MODIFIER - USE REF
+              const isDoubleDmg = activePerksRef.current.some(p => p.type === PerkType.DAMAGE);
               const activeDmg = isDoubleDmg ? tower.damage * 2 : tower.damage;
 
               let pType: 'SINGLE' | 'AOE' = 'SINGLE';
@@ -877,7 +891,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     if (state.gameTime % 5 === 0) {
       setUiState({ ...state });
     }
-  }, [onGameOver, handleStartWave, currentMap, activePerks]); // Removed spawnQueue from dependencies
+  }, [onGameOver, handleStartWave, currentMap]); // Removed activePerks from dependency
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -973,6 +987,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         ctx.save();
         ctx.translate(tower.position.x, tower.position.y);
         
+        // VISUAL PERK INDICATOR ON TOWER - USE REF
+        const hasDmgBuff = activePerksRef.current.some(p => p.type === PerkType.DAMAGE);
+        const hasSpeedBuff = activePerksRef.current.some(p => p.type === PerkType.SPEED);
+        
+        // Aura under tower if buffed
+        if (hasDmgBuff || hasSpeedBuff) {
+            ctx.save();
+            ctx.globalAlpha = 0.3 + Math.sin(gameStateRef.current.gameTime * 0.2) * 0.1;
+            ctx.fillStyle = hasDmgBuff ? '#ef4444' : '#eab308';
+            ctx.beginPath();
+            ctx.arc(0, 0, 25, 0, Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+        }
+
         // Base
         ctx.fillStyle = '#1e293b'; 
         ctx.beginPath();
@@ -1335,7 +1364,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1, gameSpeed: 1 };
       setHasStartedGame(false); // Go back to map select
       towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = []; floatingTextsRef.current = [];
-      perkDropsRef.current = []; setActivePerks([]);
+      perkDropsRef.current = []; 
+      
+      // Reset Perks
+      setActivePerks([]);
+      activePerksRef.current = [];
       
       // Reset Inventory
       setPerkInventory({
@@ -1437,8 +1470,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         <div className="absolute top-14 right-3 flex flex-col gap-2 pointer-events-none">
             {activePerks.map(perk => {
                 const info = PERK_STATS[perk.type];
-                const remaining = perk.endTime - gameStateRef.current.gameTime;
-                const pct = remaining / perk.duration;
+                // Use uiState.gameTime if available for smoother React updates, but fallback to ref for safety
+                // Actually uiState.gameTime is updated every 5 frames, so it's good for react render
+                const remaining = perk.endTime - uiState.gameTime;
+                const pct = Math.max(0, Math.min(1, remaining / perk.duration));
                 
                 return (
                     <div key={perk.type} className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg p-2 flex items-center gap-2 animate-in slide-in-from-right-10 shadow-lg min-w-[120px]">
