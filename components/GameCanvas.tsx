@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY } from '../constants';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle } from 'lucide-react';
+import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Plus, X } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -211,6 +211,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
   const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{title: string, subtitle?: string, color: string, type: 'info' | 'boss'} | null>(null);
+  const [isStoreOpen, setIsStoreOpen] = useState(false);
   
   const [spawnQueue, setSpawnQueue] = useState<{ type: EnemyType; delay: number }[]>([]);
   const [userName, setUserName] = useState<string>("");
@@ -1056,7 +1057,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (gameStateRef.current.isGameOver || !hasStartedGame) return;
+    if (gameStateRef.current.isGameOver || !hasStartedGame || isStoreOpen) return;
     (e.target as Element).setPointerCapture(e.pointerId);
     isPointerDownRef.current = true;
     mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY);
@@ -1070,7 +1071,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     isPointerDownRef.current = false;
     (e.target as Element).releasePointerCapture(e.pointerId);
 
-    if (gameStateRef.current.isGameOver || !hasStartedGame) return;
+    if (gameStateRef.current.isGameOver || !hasStartedGame || isStoreOpen) return;
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos) return; 
     
@@ -1180,6 +1181,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     setUiState({...gameStateRef.current});
   };
 
+  const handleShopPurchase = (amount: number, stars: number) => {
+    // NOTE: In a real production app, you would fetch a generated invoice slug from your backend here.
+    // Example: const slug = await fetch('/api/create-invoice', { method: 'POST', body: JSON.stringify({ stars }) }).then(r => r.json());
+    
+    // window.Telegram.WebApp.openInvoice(slug, (status) => {
+    //   if (status === 'paid') {
+    //      // Handle success
+    //   }
+    // });
+    
+    // For this demonstration/frontend-only prototype, we simulate a successful transaction:
+    triggerHaptic('success');
+    audioService.playBuild();
+    gameStateRef.current.money += amount;
+    setUiState({...gameStateRef.current});
+    spawnFloatingText({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }, `+${amount} CREDITS`, '#fbbf24');
+    setIsStoreOpen(false);
+  };
+
   return (
     <div className="flex flex-col gap-2 w-full h-full overflow-hidden box-border">
       {/* 1. GAME CANVAS AREA (Maximized) */}
@@ -1234,6 +1254,78 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             </div>
         )}
 
+        {/* SHOP MODAL */}
+        {isStoreOpen && (
+            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-40 backdrop-blur-md animate-in fade-in duration-200">
+                <div className="bg-slate-900 border border-yellow-500/30 rounded-2xl p-6 w-[300px] shadow-[0_0_50px_rgba(234,179,8,0.2)] relative">
+                    <button onClick={() => setIsStoreOpen(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white p-2">
+                        <X size={20} />
+                    </button>
+                    
+                    <div className="text-center mb-6">
+                        <h2 className="text-2xl font-display text-yellow-400 mb-1 tracking-widest">SUPPLY DROP</h2>
+                        <p className="text-slate-400 text-xs">Acquire resources via Star Command</p>
+                    </div>
+
+                    <div className="space-y-3">
+                        <button 
+                            onClick={() => handleShopPurchase(500, 50)}
+                            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-3 flex items-center justify-between group transition-all"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="bg-yellow-500/10 p-2 rounded-full border border-yellow-500/20">
+                                    <Coins size={20} className="text-yellow-400" />
+                                </div>
+                                <div className="text-left">
+                                    <div className="font-bold text-white text-sm">500 Credits</div>
+                                    <div className="text-[10px] text-slate-400">Basic Supply</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold group-hover:bg-blue-500 transition-colors">
+                                <Star size={12} fill="currentColor" /> 50
+                            </div>
+                        </button>
+
+                        <button 
+                            onClick={() => handleShopPurchase(1200, 100)}
+                            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-3 flex items-center justify-between group transition-all"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="bg-yellow-500/10 p-2 rounded-full border border-yellow-500/20">
+                                    <Coins size={20} className="text-yellow-400" />
+                                </div>
+                                <div className="text-left">
+                                    <div className="font-bold text-white text-sm">1200 Credits</div>
+                                    <div className="text-[10px] text-slate-400">Tactical Pack</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold group-hover:bg-blue-500 transition-colors">
+                                <Star size={12} fill="currentColor" /> 100
+                            </div>
+                        </button>
+
+                        <button 
+                            onClick={() => handleShopPurchase(2500, 200)}
+                            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-3 flex items-center justify-between group transition-all"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="bg-yellow-500/10 p-2 rounded-full border border-yellow-500/20">
+                                    <Coins size={20} className="text-yellow-400" />
+                                </div>
+                                <div className="text-left">
+                                    <div className="font-bold text-white text-sm">2500 Credits</div>
+                                    <div className="text-[10px] text-slate-400">War Chest</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold group-hover:bg-blue-500 transition-colors">
+                                <Star size={12} fill="currentColor" /> 200
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* NOTIFICATION OVERLAY */}
         {notification && (
             <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none flex flex-col items-center justify-center animate-in fade-in zoom-in-90 duration-300 ${notification.type === 'boss' ? 'animate-pulse' : ''}`}>
@@ -1249,7 +1341,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         )}
 
         {/* UPGRADE MENU OVERLAY */}
-        {selectedTowerEntity && !uiState.isGameOver && (
+        {selectedTowerEntity && !uiState.isGameOver && !isStoreOpen && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-blue-500/30 rounded-2xl p-2 flex gap-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-xl z-10 animate-in fade-in slide-in-from-bottom-4">
                  <div className="flex flex-col items-center border-r border-slate-700/50 pr-4 justify-center">
                      <span className="text-[10px] font-bold text-slate-400 mb-0.5 tracking-wider">LEVEL {selectedTowerEntity.level}</span>
@@ -1299,9 +1391,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                     <Heart className="text-red-500 w-3.5 h-3.5 drop-shadow-sm" />
                     <span className="text-sm font-bold text-red-100">{uiState.lives}</span>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 relative">
                     <Coins className="text-yellow-400 w-3.5 h-3.5 drop-shadow-sm" />
                     <span className="text-sm font-bold text-yellow-100">{uiState.money}</span>
+                    <button 
+                        onClick={() => setIsStoreOpen(true)}
+                        className="ml-1 w-4 h-4 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white"
+                    >
+                        <Plus size={10} />
+                    </button>
                 </div>
                 <div className="flex items-center gap-1.5">
                     <Shield className="text-blue-400 w-3.5 h-3.5 drop-shadow-sm" />
