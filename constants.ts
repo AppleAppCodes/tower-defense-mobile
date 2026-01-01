@@ -4,7 +4,7 @@ import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition, GameTheme, 
 // Portrait resolution
 export const CANVAS_WIDTH = 400;
 export const CANVAS_HEIGHT = 800;
-export const GRID_SIZE = 40;
+export const GRID_SIZE = 50; // Increased from 40 to 50 for chunkier visuals
 export const AUTO_START_DELAY = 600; 
 
 // --- ERA CONFIGURATION ---
@@ -76,16 +76,16 @@ export const MAPS: MapDefinition[] = [
     id: 'plains',
     name: 'Green Plains',
     difficulty: 'EASY',
-    waypoints: [
+    waypoints: [ // Adjusted for 50px Grid (400x800)
       { x: 200, y: 0 },
-      { x: 200, y: 120 },
-      { x: 80, y: 120 },
-      { x: 80, y: 320 },
-      { x: 320, y: 320 },
-      { x: 320, y: 520 },
-      { x: 120, y: 520 },
-      { x: 120, y: 720 },
-      { x: 200, y: 720 },
+      { x: 200, y: 150 },
+      { x: 100, y: 150 },
+      { x: 100, y: 350 },
+      { x: 300, y: 350 },
+      { x: 300, y: 550 },
+      { x: 150, y: 550 },
+      { x: 150, y: 750 },
+      { x: 200, y: 750 },
       { x: 200, y: 800 },
     ]
   },
@@ -93,14 +93,14 @@ export const MAPS: MapDefinition[] = [
     id: 'desert',
     name: 'Dusty Canyon',
     difficulty: 'MEDIUM',
-    waypoints: [
-      { x: 40, y: 0 },
-      { x: 40, y: 200 },
-      { x: 360, y: 200 },
-      { x: 360, y: 440 },
-      { x: 40, y: 440 }, // Big loop cross
-      { x: 40, y: 600 },
-      { x: 200, y: 600 },
+    waypoints: [ // Adjusted for 50px Grid
+      { x: 50, y: 0 },
+      { x: 50, y: 200 },
+      { x: 350, y: 200 },
+      { x: 350, y: 450 },
+      { x: 50, y: 450 }, 
+      { x: 50, y: 650 },
+      { x: 200, y: 650 },
       { x: 200, y: 800 },
     ]
   }
@@ -138,7 +138,7 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Basic',
     type: TowerType.BASIC,
     cost: 50,
-    range: 120,
+    range: 140, // Increased slightly due to larger grid
     damage: 20,
     cooldown: 40,
   },
@@ -146,15 +146,15 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Rapid',
     type: TowerType.RAPID,
     cost: 120,
-    range: 100,
+    range: 120,
     damage: 8,
-    cooldown: 12, // Slower for arrows
+    cooldown: 12, 
   },
   [TowerType.SNIPER]: {
     baseName: 'Sniper',
     type: TowerType.SNIPER,
     cost: 200,
-    range: 280,
+    range: 300,
     damage: 120,
     cooldown: 120,
   },
@@ -162,7 +162,7 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Splasher',
     type: TowerType.AOE,
     cost: 300,
-    range: 160,
+    range: 180,
     damage: 50,
     cooldown: 90,
   },
@@ -170,7 +170,7 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Beam',
     type: TowerType.LASER,
     cost: 180,
-    range: 140,
+    range: 160,
     damage: 5,
     cooldown: 5, 
   },
@@ -178,7 +178,7 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Cold',
     type: TowerType.FROST,
     cost: 150,
-    range: 110,
+    range: 130,
     damage: 10,
     cooldown: 45,
   },
@@ -186,7 +186,7 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Zap',
     type: TowerType.SHOCK,
     cost: 250,
-    range: 90,
+    range: 110,
     damage: 80,
     cooldown: 50,
   },
@@ -194,17 +194,17 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
     baseName: 'Boom',
     type: TowerType.MISSILE,
     cost: 400,
-    range: 200,
+    range: 220,
     damage: 60,
     cooldown: 100,
   }
 };
 
 export const ENEMY_STATS: Record<EnemyType, { maxHp: number; speed: number; reward: number; expReward: number; color: string; radius: number }> = {
-  [EnemyType.NORMAL]: { maxHp: 80, speed: 1.0, reward: 10, expReward: 15, color: '#94a3b8', radius: 12 }, 
-  [EnemyType.FAST]: { maxHp: 40, speed: 2.0, reward: 15, expReward: 10, color: '#a3e635', radius: 8 },   
-  [EnemyType.TANK]: { maxHp: 300, speed: 0.6, reward: 35, expReward: 50, color: '#475569', radius: 16 },   
-  [EnemyType.BOSS]: { maxHp: 3000, speed: 0.4, reward: 250, expReward: 500, color: '#ef4444', radius: 28 }, 
+  [EnemyType.NORMAL]: { maxHp: 80, speed: 1.0, reward: 10, expReward: 15, color: '#94a3b8', radius: 16 }, // Larger radius
+  [EnemyType.FAST]: { maxHp: 40, speed: 2.0, reward: 15, expReward: 10, color: '#a3e635', radius: 12 },   
+  [EnemyType.TANK]: { maxHp: 300, speed: 0.6, reward: 35, expReward: 50, color: '#475569', radius: 24 },   
+  [EnemyType.BOSS]: { maxHp: 3000, speed: 0.4, reward: 250, expReward: 500, color: '#ef4444', radius: 36 }, 
 };
 
 export const PERK_STATS: Record<PerkType, { color: string; duration: number; icon: string, name: string }> = {
