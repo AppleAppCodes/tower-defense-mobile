@@ -1,13 +1,14 @@
 
 import React from 'react';
-import { Swords, Map, Shield, Cpu, ChevronRight } from 'lucide-react';
+import { Swords, Map, Shield, Cpu, ChevronRight, Globe } from 'lucide-react';
 
 interface MainMenuProps {
   onStartAdventure: () => void;
   onStartPvp: () => void;
+  onStartOnline: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStartAdventure, onStartPvp }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStartAdventure, onStartPvp, onStartOnline }) => {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-slate-950 text-white relative overflow-hidden">
       {/* Background decorations */}
@@ -56,19 +57,45 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartAdventure, onStartPvp
             </button>
 
             <button 
-                disabled
                 onClick={onStartPvp}
-                className="w-full relative overflow-hidden p-[1px] rounded-xl shadow-lg opacity-60 grayscale cursor-not-allowed border border-slate-800"
+                className="group w-full relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 p-[1px] rounded-xl shadow-lg transition-transform active:scale-95"
             >
-                <div className="bg-slate-950 rounded-[11px] p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-slate-800 rounded-lg p-3 text-slate-400">
-                            <Swords size={24} />
+                <div className="bg-slate-950 rounded-[11px] p-4 relative overflow-hidden group-hover:bg-slate-900 transition-colors">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                    <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg p-3 text-white shadow-lg">
+                                <Swords size={24} />
+                            </div>
+                            <div className="text-left">
+                                <div className="font-bold font-display text-lg text-white">LOCAL PVP</div>
+                                <div className="text-[10px] text-blue-200/70 font-mono tracking-wider">HOTSEAT (PASS & PLAY)</div>
+                            </div>
                         </div>
-                        <div className="text-left">
-                            <div className="font-bold font-display text-lg text-slate-400">PVP BATTLES</div>
-                            <div className="text-[10px] text-slate-600 font-mono tracking-wider">COMING SOON</div>
+                        <ChevronRight className="text-white/30 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                    </div>
+                </div>
+            </button>
+
+             <button 
+                onClick={onStartOnline}
+                className="group w-full relative overflow-hidden bg-gradient-to-r from-indigo-600 to-violet-600 p-[1px] rounded-xl shadow-lg transition-transform active:scale-95"
+            >
+                <div className="bg-slate-950 rounded-[11px] p-4 relative overflow-hidden group-hover:bg-slate-900 transition-colors">
+                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                    <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg p-3 text-white shadow-lg">
+                                <Globe size={24} />
+                            </div>
+                            <div className="text-left">
+                                <div className="font-bold font-display text-lg text-white">ONLINE MATCH</div>
+                                <div className="text-[10px] text-indigo-200/70 font-mono tracking-wider">REAL-TIME MULTIPLAYER</div>
+                            </div>
                         </div>
+                        <ChevronRight className="text-white/30 group-hover:text-white group-hover:translate-x-1 transition-all" />
                     </div>
                 </div>
             </button>

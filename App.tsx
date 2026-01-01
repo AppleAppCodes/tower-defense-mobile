@@ -2,96 +2,92 @@
 import React, { useState, useEffect } from 'react';
 import GameCanvas from './components/GameCanvas';
 import { MainMenu } from './components/MainMenu';
+import { Lobby } from './components/Lobby';
 import { Home } from 'lucide-react';
+import { GameMode } from './types';
 
 const App: React.FC = () => {
   const [highScore, setHighScore] = useState(0);
   const [appHeight, setAppHeight] = useState('100vh');
-  const [view, setView] = useState<'MENU' | 'GAME'>('MENU');
+  const [view, setView] = useState<'MENU' | 'GAME' | 'LOBBY'>('MENU');
+  const [gameMode, setGameMode] = useState<GameMode>('DEFENSE');
+  
+  // Online State
+  const [onlineGameId, setOnlineGameId] = useState<string | undefined>(undefined);
+  const [onlineRole, setOnlineRole] = useState<'DEFENDER' | 'ATTACKER' | undefined>(undefined);
 
   useEffect(() => {
     // Initialize Telegram Web App
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
-      
-      // Expand to full height immediately
       tg.expand(); 
-      
-      // Match theme colors to our Slate-950 background
       tg.setHeaderColor('#0f172a'); 
       tg.setBackgroundColor('#0f172a');
-      
-      // Enable the closing confirmation to prevent accidental swipes closing the game
       tg.enableClosingConfirmation();
-
-      // Disable vertical swipes (Newer Telegram API feature) to lock the view
       if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7')) {
-          if (typeof tg.disableVerticalSwipes === 'function') {
-              tg.disableVerticalSwipes();
-          }
+          if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes();
       } else {
-           // Fallback attempt: some versions expose 'isVerticalSwipesEnabled' property directly
            // @ts-ignore
-           if (tg.isVerticalSwipesEnabled !== undefined) {
-               // @ts-ignore
-               tg.isVerticalSwipesEnabled = false;
-           }
+           if (tg.isVerticalSwipesEnabled !== undefined) tg.isVerticalSwipesEnabled = false;
       }
-
-      // Notify Telegram that the app is initialized and ready to be shown
       tg.ready();
     }
 
-    // Dynamic viewport height fix for mobile browsers/webviews
-    const handleResize = () => {
-      // Use window.innerHeight to get the actual visible area
-      setAppHeight(`${window.innerHeight}px`);
-    };
-
-    // Set initial height
+    const handleResize = () => setAppHeight(`${window.innerHeight}px`);
     handleResize();
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleGameOver = (wave: number) => {
-    if (wave > highScore) {
-      setHighScore(wave);
-    }
+    if (wave > highScore) setHighScore(wave);
   };
 
   const handleStartAdventure = () => {
-      // Haptic feedback if available
-      if (window.Telegram?.WebApp?.HapticFeedback) {
-          window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
-      }
+      if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+      setGameMode('DEFENSE');
+      setView('GAME');
+  };
+
+  const handleStartPvp = () => {
+      if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+      setGameMode('PVP_LOCAL'); 
+      setView('GAME');
+  };
+
+  const handleStartOnline = () => {
+      if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+      setView('LOBBY');
+  };
+
+  const handleMatchFound = (role: 'DEFENDER' | 'ATTACKER', gameId: string) => {
+      setOnlineRole(role);
+      setOnlineGameId(gameId);
+      setGameMode('PVP_ONLINE');
       setView('GAME');
   };
 
   const handleBackToMenu = () => {
-      if (window.Telegram?.WebApp?.HapticFeedback) {
-          window.Telegram.WebApp.HapticFeedback.selectionChanged();
-      }
+      if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.selectionChanged();
       setView('MENU');
+      setOnlineGameId(undefined);
+      setOnlineRole(undefined);
   };
 
   return (
-    <div 
-      style={{ height: appHeight }} 
-      className="w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none overscroll-none"
-    >
+    <div style={{ height: appHeight }} className="w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none overscroll-none">
       {view === 'MENU' ? (
-          <MainMenu 
-            onStartAdventure={handleStartAdventure} 
-            onStartPvp={() => {}} 
-          />
+          <MainMenu onStartAdventure={handleStartAdventure} onStartPvp={handleStartPvp} onStartOnline={handleStartOnline} />
+      ) : view === 'LOBBY' ? (
+          <Lobby onBack={handleBackToMenu} onMatchFound={handleMatchFound} />
       ) : (
           <div className="relative w-full h-full animate-in fade-in duration-300">
-            {/* Game Container */}
-            <GameCanvas onGameOver={handleGameOver} />
-            
-            {/* Back to Menu Button - Floating Top Left */}
+            <GameCanvas 
+                onGameOver={handleGameOver} 
+                initialMode={gameMode} 
+                onlineGameId={onlineGameId}
+                onlineRole={onlineRole}
+            />
              <button 
                 onClick={handleBackToMenu}
                 className="absolute top-3 left-3 z-50 p-2 bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full backdrop-blur-md border border-white/10 transition-all shadow-lg active:scale-90"

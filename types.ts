@@ -1,6 +1,11 @@
 
 export type Vector2D = { x: number; y: number };
 
+export type GameMode = 'DEFENSE' | 'ATTACK' | 'PVP_LOCAL' | 'PVP_ONLINE';
+
+export type PvpPhase = 'P1_BUILD' | 'HANDOVER_TO_P2' | 'P2_ATTACK' | 'P2_BUILD' | 'HANDOVER_TO_P1' | 'P1_ATTACK' | 'GAME_OVER' 
+                     | 'ONLINE_WAITING' | 'ONLINE_BUILDING' | 'ONLINE_ATTACKING' | 'ONLINE_SPECTATING';
+
 export enum TowerType {
   BASIC = 'BASIC',
   RAPID = 'RAPID',
@@ -47,6 +52,14 @@ export interface TowerConfig {
   damage: number;
   cooldown: number; // Frames between shots
   baseName: string; // Generic name used for ID
+}
+
+export interface UnitConfig {
+    type: EnemyType;
+    cost: number;
+    name: string;
+    count: number; // How many spawn per click (squad size)
+    icon: string;
 }
 
 export interface MapDefinition {
@@ -134,6 +147,8 @@ export interface FloatingText {
 }
 
 export interface GameState {
+  mode: GameMode; 
+  pvpPhase?: PvpPhase; 
   money: number;
   lives: number;
   wave: number;
@@ -153,6 +168,18 @@ export interface WaveConfig {
   count: number;
   interval: number; // Frames between spawns
   enemyType: EnemyType;
+}
+
+// Socket Events Payloads
+export interface ServerToClientEvents {
+  match_found: (data: { role: 'DEFENDER' | 'ATTACKER', gameId: string }) => void;
+  opponent_action: (action: { type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any }) => void;
+  room_error: (msg: string) => void;
+}
+
+export interface ClientToServerEvents {
+  join_game: (roomId: string) => void;
+  send_action: (data: { gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any }) => void;
 }
 
 // Telegram Web App Global Types

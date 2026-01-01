@@ -1,5 +1,5 @@
 
-import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition, GameTheme, PerkType } from './types';
+import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition, GameTheme, PerkType, UnitConfig } from './types';
 
 // Portrait resolution
 export const CANVAS_WIDTH = 400;
@@ -211,6 +211,37 @@ export const TOWER_TYPES: Record<TowerType, TowerConfig> = {
   }
 };
 
+export const UNIT_TYPES: Record<string, UnitConfig> = {
+    'SQUAD': {
+        type: EnemyType.NORMAL,
+        cost: 60,
+        name: 'Grunt Squad',
+        count: 3,
+        icon: '⚔️'
+    },
+    'RUSH': {
+        type: EnemyType.FAST,
+        cost: 100,
+        name: 'Speed Rush',
+        count: 5,
+        icon: '🐎'
+    },
+    'TANK': {
+        type: EnemyType.TANK,
+        cost: 150,
+        name: 'Heavy Tank',
+        count: 1,
+        icon: '🛡️'
+    },
+    'BOSS': {
+        type: EnemyType.BOSS,
+        cost: 500,
+        name: 'Titan',
+        count: 1,
+        icon: '👹'
+    }
+};
+
 export const ENEMY_STATS: Record<EnemyType, { maxHp: number; speed: number; reward: number; expReward: number; color: string; radius: number }> = {
   [EnemyType.NORMAL]: { maxHp: 80, speed: 1.0, reward: 10, expReward: 15, color: '#94a3b8', radius: 16 }, 
   [EnemyType.FAST]: { maxHp: 40, speed: 2.0, reward: 15, expReward: 10, color: '#a3e635', radius: 12 },   
@@ -226,6 +257,7 @@ export const PERK_STATS: Record<PerkType, { color: string; duration: number; ico
 };
 
 export const INITIAL_STATE = {
+  mode: 'DEFENSE',
   money: 100,
   lives: 20,
   wave: 1,
