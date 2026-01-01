@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY, THEMES } from '../constants';
+import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Particle, MapDefinition, FloatingText, PerkDrop, ActivePerk, PerkType } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, PERK_STATS, GRID_SIZE, INITIAL_STATE, AUTO_START_DELAY, THEMES } from '../constants';
 import { audioService } from '../services/audioService';
-import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Palette, X, Check } from 'lucide-react';
+import { Heart, Coins, Shield, Play, RefreshCw, Timer, ChevronRight, ChevronLeft, Zap, Trash2, FastForward, AlertTriangle, Star, Palette, X, Check, Flame, Gauge } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -193,6 +193,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
   const particlesRef = useRef<Particle[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   
+  // NEW: Perks refs
+  const perkDropsRef = useRef<PerkDrop[]>([]);
+  const [activePerks, setActivePerks] = useState<ActivePerk[]>([]);
+  
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
   const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
@@ -301,6 +305,26 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     }
   };
 
+  // Helper to spawn perks on death
+  const handleEnemyDeath = (enemy: Enemy) => {
+      // 5% Chance for normal enemies, 100% for Bosses
+      const chance = enemy.type === EnemyType.BOSS ? 1.0 : 0.05;
+      
+      if (Math.random() < chance) {
+          const types = [PerkType.DAMAGE, PerkType.SPEED, PerkType.MONEY, PerkType.FREEZE];
+          const randType = types[Math.floor(Math.random() * types.length)];
+          
+          perkDropsRef.current.push({
+              id: Math.random().toString(),
+              position: { ...enemy.position },
+              type: randType,
+              life: 300, // 5 seconds to pick up
+              maxLife: 300
+          });
+          audioService.playBuild(); // Use build sound as a "drop" sound for now
+      }
+  };
+
   const startWave = useCallback((waveNum: number) => {
     // UPDATED: Bosses appear every 5 rounds
     const isBossWave = waveNum > 0 && waveNum % 5 === 0;
@@ -383,6 +407,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         state.gameTime++;
         // Animate Scanline
         terrainRef.current.scanline = (terrainRef.current.scanline + 2) % CANVAS_HEIGHT;
+
+        // --- UPDATE ACTIVE PERKS ---
+        setActivePerks(prev => prev.filter(p => {
+             if (state.gameTime >= p.endTime) return false;
+             return true;
+        }));
+
+        // --- UPDATE PERK DROPS (Disappearing) ---
+        for (let i = perkDropsRef.current.length - 1; i >= 0; i--) {
+            perkDropsRef.current[i].life--;
+            if (perkDropsRef.current[i].life <= 0) {
+                perkDropsRef.current.splice(i, 1);
+            }
+        }
 
         // --- VISUAL FX UPDATE LOOP (Runs even if !isPlaying) ---
         
@@ -553,10 +591,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
               tower.rotation = Math.atan2(target.position.y - tower.position.y, target.position.x - tower.position.x);
           }
 
-          if (tower.lastShotFrame + tower.cooldown <= state.gameTime) {
+          // PERK MODIFIERS
+          const isRapid = activePerks.some(p => p.type === PerkType.SPEED);
+          const activeCooldown = isRapid ? tower.cooldown / 2 : tower.cooldown;
+
+          if (tower.lastShotFrame + activeCooldown <= state.gameTime) {
             if (target) {
               tower.lastShotFrame = state.gameTime;
               
+              // PERK DAMAGE MODIFIER
+              const isDoubleDmg = activePerks.some(p => p.type === PerkType.DAMAGE);
+              const activeDmg = isDoubleDmg ? tower.damage * 2 : tower.damage;
+
               let pType: 'SINGLE' | 'AOE' = 'SINGLE';
               let blast = 0;
               let effect: 'FREEZE' | 'SHOCK' | undefined = undefined;
@@ -578,7 +624,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
                 id: Math.random().toString(),
                 position: { ...tower.position },
                 targetId: target.id,
-                damage: tower.damage,
+                damage: activeDmg,
                 speed: speed,
                 color: color,
                 radius: 3,
@@ -596,6 +642,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
           if (enemiesRef.current[i].hp <= 0) {
             state.money += enemiesRef.current[i].moneyReward;
+            
+            // Drop Perk Logic
+            if (loop === 0) handleEnemyDeath(enemiesRef.current[i]);
+
             spawnFloatingText(enemiesRef.current[i].position, `+$${enemiesRef.current[i].moneyReward}`, '#fbbf24');
             spawnParticle(enemiesRef.current[i].position, '#fff', 1, 'ring'); // Death ring
             spawnParticle(enemiesRef.current[i].position, enemiesRef.current[i].color, 8, 'circle');
@@ -607,12 +657,27 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     if (state.gameTime % 5 === 0) {
       setUiState({ ...state });
     }
-  }, [spawnQueue, onGameOver, handleStartWave, currentMap]);
+  }, [spawnQueue, onGameOver, handleStartWave, currentMap, activePerks]);
 
   const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower) => {
     ctx.save();
     ctx.translate(tower.position.x, tower.position.y);
     
+    // VISUAL PERK INDICATOR ON TOWER
+    const hasDmgBuff = activePerks.some(p => p.type === PerkType.DAMAGE);
+    const hasSpeedBuff = activePerks.some(p => p.type === PerkType.SPEED);
+    
+    // Aura under tower if buffed
+    if (hasDmgBuff || hasSpeedBuff) {
+        ctx.save();
+        ctx.globalAlpha = 0.3 + Math.sin(gameStateRef.current.gameTime * 0.2) * 0.1;
+        ctx.fillStyle = hasDmgBuff ? '#ef4444' : '#eab308';
+        ctx.beginPath();
+        ctx.arc(0, 0, 25, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+    }
+
     const color = TOWER_TYPES[tower.type].color;
 
     // --- 1. BASE PLATFORM (Technical octagon) ---
@@ -865,7 +930,45 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     ctx.setLineDash([]);
     ctx.restore();
 
-    // 4. Towers
+    // 4. Perk Drops (Render BEFORE towers/enemies so they look "on the ground")
+    perkDropsRef.current.forEach(perk => {
+        ctx.save();
+        ctx.translate(perk.position.x, perk.position.y);
+        
+        // Bobbing animation
+        const bob = Math.sin(gameStateRef.current.gameTime * 0.1) * 3;
+        ctx.translate(0, bob);
+        
+        const info = PERK_STATS[perk.type];
+        const pulse = 1 + Math.sin(gameStateRef.current.gameTime * 0.2) * 0.2;
+        
+        // Glow
+        ctx.shadowColor = info.color;
+        ctx.shadowBlur = 15;
+        
+        // Background Circle
+        ctx.fillStyle = info.color;
+        ctx.beginPath(); ctx.arc(0, 0, 16 * pulse, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        // Icon
+        ctx.font = "16px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(info.icon, 0, 1);
+        
+        // Disappearing Timer Ring
+        const lifePct = perk.life / perk.maxLife;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, -Math.PI/2, (-Math.PI/2) + (Math.PI*2 * lifePct));
+        ctx.stroke();
+        
+        ctx.restore();
+    });
+
+    // 5. Towers
     towersRef.current.forEach(tower => {
         drawTower(ctx, tower);
         // Draw selection ring
@@ -889,7 +992,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         }
     });
 
-    // 5. Enemies (NEW COMPLEX RENDERER)
+    // 6. Enemies (NEW COMPLEX RENDERER)
     enemiesRef.current.forEach(enemy => {
         const target = currentMap.waypoints[enemy.pathIndex + 1];
         let angle = 0;
@@ -1022,7 +1125,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
         }
     });
 
-    // 6. Projectiles (Lasers/Tracers)
+    // 7. Projectiles (Lasers/Tracers)
     projectilesRef.current.forEach(p => {
       ctx.save();
       ctx.shadowBlur = 10;
@@ -1046,7 +1149,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       ctx.restore();
     });
 
-    // 7. Particles
+    // 8. Particles
     particlesRef.current.forEach(p => {
       ctx.globalAlpha = p.life;
       
@@ -1064,7 +1167,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       }
     });
 
-    // 8. Floating Text
+    // 9. Floating Text
     ctx.font = "bold 14px Orbitron";
     ctx.textAlign = "center";
     floatingTextsRef.current.forEach(ft => {
@@ -1078,7 +1181,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
 
     ctx.globalAlpha = 1.0;
 
-    // 9. Preview
+    // 10. Preview
     if (mousePosRef.current && selectedTowerType) {
         const { x, y } = mousePosRef.current;
         const gx = Math.floor(x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
@@ -1102,7 +1205,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
             ctx.stroke();
         }
     }
-  }, [selectedTowerType, selectedPlacedTowerId, currentMap, activeThemeId]); // Add activeThemeId dependency
+  }, [selectedTowerType, selectedPlacedTowerId, currentMap, activeThemeId, activePerks]); // Add activeThemeId, activePerks dependency
 
   useEffect(() => {
     let animationFrameId: number;
@@ -1139,7 +1242,43 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos) return; 
     
-    // Check if clicked on existing tower
+    // 1. Check Collision with Perk Drops (Priority over towers)
+    const clickedPerkIndex = perkDropsRef.current.findIndex(p => distance(p.position, pos) < 30);
+    if (clickedPerkIndex !== -1) {
+        const perk = perkDropsRef.current[clickedPerkIndex];
+        
+        // Apply Immediate Effect
+        if (perk.type === PerkType.MONEY) {
+            gameStateRef.current.money += 100;
+            spawnFloatingText(perk.position, "+$100", "#22c55e");
+            audioService.playBuild(); // Coin sound
+        } else if (perk.type === PerkType.FREEZE) {
+            enemiesRef.current.forEach(e => e.frozen = 180); // 3 seconds
+            spawnParticle(perk.position, '#06b6d4', 20, 'ring');
+            audioService.playShoot('LASER');
+        } else {
+            // Apply Buff
+            const duration = PERK_STATS[perk.type].duration;
+            setActivePerks(prev => {
+                // Remove existing same type to refresh
+                const filtered = prev.filter(p => p.type !== perk.type);
+                return [...filtered, {
+                    type: perk.type,
+                    endTime: gameStateRef.current.gameTime + duration,
+                    duration: duration
+                }];
+            });
+            audioService.playAlarm(); // Powerup sound
+        }
+        
+        // Remove perk
+        spawnParticle(perk.position, '#fff', 10, 'circle');
+        perkDropsRef.current.splice(clickedPerkIndex, 1);
+        triggerHaptic('success');
+        return; // Stop processing click
+    }
+    
+    // 2. Check if clicked on existing tower
     const clickedTower = towersRef.current.find(t => distance(t.position, pos) < 20);
     
     if (clickedTower) {
@@ -1189,6 +1328,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
       gameStateRef.current = { ...INITIAL_STATE, isPlaying: false, isGameOver: false, gameTime: 0, autoStartTimer: -1, gameSpeed: 1 };
       setHasStartedGame(false); // Go back to map select
       towersRef.current = []; enemiesRef.current = []; projectilesRef.current = []; particlesRef.current = []; floatingTextsRef.current = [];
+      perkDropsRef.current = []; setActivePerks([]);
       setSpawnQueue([]);
       setUiState({...gameStateRef.current});
       triggerHaptic('medium');
@@ -1276,6 +1416,32 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver }) => {
           style={{ width: '100%', height: '100%', touchAction: 'none' }}
           className="block cursor-crosshair"
         />
+
+        {/* ACTIVE PERKS UI */}
+        <div className="absolute top-14 right-3 flex flex-col gap-2 pointer-events-none">
+            {activePerks.map(perk => {
+                const info = PERK_STATS[perk.type];
+                const remaining = perk.endTime - gameStateRef.current.gameTime;
+                const pct = remaining / perk.duration;
+                
+                return (
+                    <div key={perk.type} className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-lg p-2 flex items-center gap-2 animate-in slide-in-from-right-10 shadow-lg min-w-[120px]">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-inner" style={{backgroundColor: info.color + '40'}}>
+                            {info.icon}
+                        </div>
+                        <div className="flex-1">
+                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full rounded-full transition-all duration-100 ease-linear"
+                                    style={{ width: `${pct * 100}%`, backgroundColor: info.color }}
+                                />
+                            </div>
+                            <div className="text-[9px] font-bold text-slate-300 mt-1 uppercase tracking-wider">{perk.type}</div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
         
         {/* HUD: Wave Indicator (Permanent, Top-Left) */}
         {!uiState.isGameOver && hasStartedGame && (

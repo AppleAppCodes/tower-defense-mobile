@@ -18,6 +18,27 @@ export enum EnemyType {
   BOSS = 'BOSS'
 }
 
+export enum PerkType {
+  DAMAGE = 'DAMAGE',   // Double Damage
+  SPEED = 'SPEED',     // Fast Fire Rate
+  MONEY = 'MONEY',     // Instant Cash
+  FREEZE = 'FREEZE'    // Freeze All
+}
+
+export interface PerkDrop {
+  id: string;
+  position: Vector2D;
+  type: PerkType;
+  life: number; // Frames until disappear
+  maxLife: number;
+}
+
+export interface ActivePerk {
+  type: PerkType;
+  endTime: number; // GameTime frame when it expires
+  duration: number; // Total duration in frames
+}
+
 export interface TowerConfig {
   name: string;
   type: TowerType;
