@@ -20,15 +20,15 @@ export const SPRITE_CONFIGS: Record<string, SpriteConfig> = {
   // Stone Age (Era 0)
   'AOE_0': {
     src: '/sprites/rock-thrower.png',
-    frameWidth: 128,
-    frameHeight: 128,
+    frameWidth: 512,
+    frameHeight: 512,
     totalFrames: 43,
-    columns: 8, // 8 frames per row, 6 rows (last row partial)
+    columns: 43, // All frames in one row (horizontal strip)
     type: 'rotation'
   },
   // Add more sprites here as you create them:
-  // 'BASIC_0': { ... },
-  // 'RAPID_0': { ... },
+  // 'BASIC_0': { src: '/sprites/slinger.png', ... },
+  // 'RAPID_0': { src: '/sprites/hunter.png', ... },
 };
 
 class SpriteService {

@@ -67,14 +67,14 @@ const generateWaveEnemies = (wave: number) => {
 
 // --- DRAWING ---
 const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gameTime: number) => {
-  // Try sprite first
+  // Try sprite first (scale 0.12 = 512px -> ~60px to fit grid)
   const spriteKey = `${tower.type}_${era}`;
-  if (spriteService.drawSprite(ctx, spriteKey, 0, 0, tower.rotation, 0, 0.5)) {
+  if (spriteService.drawSprite(ctx, spriteKey, 0, 0, tower.rotation, 0, 0.12)) {
     // Sprite drawn successfully, add shadow underneath
     ctx.globalCompositeOperation = 'destination-over';
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
-    ctx.ellipse(0, 20, 20, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 15, 18, 6, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
     return;
