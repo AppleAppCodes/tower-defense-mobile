@@ -67,16 +67,23 @@ const generateWaveEnemies = (wave: number) => {
 
 // --- DRAWING ---
 const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gameTime: number) => {
-  // Try sprite first - new simplified API
+  // Try sprite first with attack animation
   const spriteKey = `${tower.type}_${era}`;
-  if (spriteService.drawSprite(ctx, spriteKey, 0, 0, 55)) {
-    // Sprite drawn with shadow included
-    return;
+  const timeSinceShot = gameTime - tower.lastShotFrame;
+  const ATTACK_ANIM_DURATION = 42; // frames for full throw animation
+
+  // Calculate animation progress (0 = idle, 0-1 = throwing animation)
+  let animProgress = 0;
+  if (timeSinceShot < ATTACK_ANIM_DURATION) {
+    animProgress = timeSinceShot / ATTACK_ANIM_DURATION;
+  }
+
+  if (spriteService.drawSprite(ctx, spriteKey, 0, 0, 60, animProgress)) {
+    return; // Sprite drawn successfully
   }
 
   // Fallback to procedural rendering
   ctx.save();
-  const timeSinceShot = gameTime - tower.lastShotFrame;
   let recoil = 0; if (timeSinceShot < 10) recoil = (10 - timeSinceShot) * 0.5;
 
   // Base shadow
