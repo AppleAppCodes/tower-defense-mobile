@@ -116,6 +116,9 @@ io.on("connection", (socket) => {
     room.readyPlayers.add(socket.id);
     console.log(`Player ${socket.id} ready in room ${gameId}. Ready: ${room.readyPlayers.size}/2`);
 
+    // Notify opponent that this player is ready
+    socket.to(gameId).emit("opponent_ready");
+
     // When both players are ready, start the game with synchronized wave
     if (room.readyPlayers.size === 2 && !room.gameStarted) {
       room.gameStarted = true;
@@ -130,6 +133,15 @@ io.on("connection", (socket) => {
       console.log(`Starting game in room ${gameId} with wave 1`);
       io.to(gameId).emit("game_start", { waveData });
     }
+  });
+
+  // Also handle the status broadcast (for UI sync before game starts)
+  socket.on("player_ready_status", ({ gameId }) => {
+    const room = rooms[gameId];
+    if (!room) return;
+
+    // Notify opponent that this player is ready (for UI display)
+    socket.to(gameId).emit("opponent_ready");
   });
 
   // Player requests next wave (when current wave is cleared)
