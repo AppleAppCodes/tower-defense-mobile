@@ -4,6 +4,7 @@ import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Ma
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, THEMES, ERA_DATA, UNIT_TYPES } from '../constants';
 import { audioService } from '../services/audioService';
 import { socketService } from '../services/socketService';
+import { spriteService } from '../services/spriteService';
 import { Heart, Coins, Play, Check, ArrowUpCircle, Sword, Wifi, PlayCircle, Clock, Home, Zap, FastForward } from 'lucide-react';
 
 interface GameCanvasProps {
@@ -66,17 +67,31 @@ const generateWaveEnemies = (wave: number) => {
 
 // --- DRAWING ---
 const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gameTime: number) => {
+  // Try sprite first
+  const spriteKey = `${tower.type}_${era}`;
+  if (spriteService.drawSprite(ctx, spriteKey, 0, 0, tower.rotation, 0, 0.5)) {
+    // Sprite drawn successfully, add shadow underneath
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(0, 20, 20, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    return;
+  }
+
+  // Fallback to procedural rendering
   ctx.save();
   const timeSinceShot = gameTime - tower.lastShotFrame;
   let recoil = 0; if (timeSinceShot < 10) recoil = (10 - timeSinceShot) * 0.5;
 
-  // Base
+  // Base shadow
   ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(0, 8, 14, 6, 0, 0, Math.PI*2); ctx.fill();
-  
+
   if (era === 0) { // Stone Age
       ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
       ctx.strokeStyle = '#78350f'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2); ctx.fill(); // Head
+      ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2); ctx.fill();
   } else if (era === 1) { // Castle
       ctx.fillStyle = '#64748b'; ctx.fillRect(-14, -14, 28, 28);
       ctx.strokeStyle = '#334155'; ctx.strokeRect(-14, -14, 28, 28);
@@ -237,13 +252,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     handleResize(); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Background Init
+  // Background Init + Sprite Preload
   useEffect(() => {
     const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
     if (ctx) { const pattern = createNoisePattern(ctx, THEMES[0].background); if (pattern) bgPatternRef.current = pattern; }
     if (sceneryRef.current.length === 0) {
         for (let i = 0; i < 60; i++) sceneryRef.current.push({ x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT, r: Math.random() * 10 + 5, type: Math.random() > 0.9 ? 'rock' : 'tree' });
     }
+    // Preload all sprites
+    spriteService.preloadAll();
   }, []);
 
   // Initialize Logic (Only on Start Button Click)
