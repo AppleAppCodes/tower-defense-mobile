@@ -4,18 +4,27 @@ import { ServerToClientEvents, ClientToServerEvents } from '../types';
 
 // NOTE: In production, replace this with your actual deployed server URL (e.g. Render, Heroku)
 // Connected to Cloudflare Secure Tunnel
-const SERVER_URL = 'http://157.180.29.14:3000';
+const SERVER_URL = 'https://doll-tar-nats-loading.trycloudflare.com'; 
+
 class SocketService {
   public socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   public isConnected: boolean = false;
 
   connect() {
-    if (this.socket) return;
+    // If socket exists but disconnected, try to reconnect
+    if (this.socket) {
+        if (!this.socket.connected) {
+            this.socket.connect();
+        }
+        return;
+    }
 
     this.socket = io(SERVER_URL, {
-      transports: ['websocket'],
+      // Allow default transports (polling first, then upgrade) for better compatibility with Cloudflare/Telegram
+      transports: ['polling', 'websocket'], 
       autoConnect: true,
-      reconnectionAttempts: 5
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     this.socket.on('connect', () => {
@@ -23,18 +32,20 @@ class SocketService {
       this.isConnected = true;
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('Disconnected from Game Server');
+    this.socket.on('disconnect', (reason) => {
+      console.log('Disconnected from Game Server:', reason);
       this.isConnected = false;
     });
 
     this.socket.on('connect_error', (err) => {
-        console.warn("Socket connection failed (Is the server running?):", err.message);
+        console.warn("Socket connection failed:", err.message);
+        this.isConnected = false;
     });
   }
 
   joinGame(roomId: string) {
     if (!this.socket) this.connect();
+    console.log('Emitting join_game for room:', roomId);
     this.socket?.emit('join_game', roomId);
   }
 
@@ -43,10 +54,16 @@ class SocketService {
   }
 
   onMatchFound(callback: (data: { role: 'DEFENDER' | 'ATTACKER', gameId: string }) => void) {
-    this.socket?.on('match_found', callback);
+    // Remove existing listeners to prevent duplicates
+    this.socket?.off('match_found');
+    this.socket?.on('match_found', (data) => {
+        console.log('Match found event received:', data);
+        callback(data);
+    });
   }
 
   onOpponentAction(callback: (action: { type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any }) => void) {
+    this.socket?.off('opponent_action');
     this.socket?.on('opponent_action', callback);
   }
 

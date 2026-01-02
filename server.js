@@ -15,7 +15,7 @@ const httpServer = createServer((req, res) => {
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Allow connections from anywhere (your Telegram app)
+    origin: "*", // Allow connections from anywhere
     methods: ["GET", "POST"]
   }
 });
@@ -27,6 +27,8 @@ io.on("connection", (socket) => {
   console.log("Player connected:", socket.id);
 
   socket.on("join_game", (roomId) => {
+    console.log(`Socket ${socket.id} attempting to join room ${roomId}`);
+    
     // Basic Matchmaking Logic
     let room = rooms[roomId];
 
@@ -34,31 +36,33 @@ io.on("connection", (socket) => {
       // Create new room, player is DEFENDER
       rooms[roomId] = { defender: socket.id, attacker: null };
       socket.join(roomId);
-    
-      console.log(`Room ${roomId} created by Defender ${socket.id}`);
+      console.log(`Room ${roomId} created. ${socket.id} is DEFENDER.`);
+      socket.emit("match_found", { role: "DEFENDER", gameId: roomId });
     } else if (!room.attacker) {
       // Join existing room, player is ATTACKER
+      rooms[roomId].attacker = socket.id;
       socket.join(roomId);
+      console.log(`Room ${roomId} joined. ${socket.id} is ATTACKER.`);
       socket.emit("match_found", { role: "ATTACKER", gameId: roomId });
-            io.to(room.defender).emit("match_found", { role: "DEFENDER", gameId: roomId });
       
       // Notify Defender that Attacker arrived
       io.to(room.defender).emit("opponent_joined");
       
-      console.log(`Attacker ${socket.id} joined Room ${roomId}`);
     } else {
       // Room full
+      console.log(`Room ${roomId} is full. Rejecting ${socket.id}.`);
       socket.emit("room_error", "Room is full");
     }
   });
 
   // Relay Actions (Spawn, Layout, etc.) directly to the other player in the room
   socket.on("send_action", ({ gameId, type, payload }) => {
+    // console.log(`Action ${type} in room ${gameId}`); 
     socket.to(gameId).emit("opponent_action", { type, payload });
   });
 
-  socket.on("disconnect", () => {
-    console.log("Player disconnected:", socket.id);
+  socket.on("disconnect", (reason) => {
+    console.log(`Player disconnected: ${socket.id} Reason: ${reason}`);
     // Cleanup logic would go here (remove room, notify opponent)
   });
 });

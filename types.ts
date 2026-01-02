@@ -99,12 +99,6 @@ export interface Enemy extends Entity {
   expReward: number; // New EXP field
   color: string;
   radius: number;
-  
-  // Animation Props
-  frameX: number; // Current frame in sprite sheet
-  maxFrame: number; // Total frames - 1
-  gameFrame: number; // Internal counter for animation speed
-  spriteLoaded?: boolean;
 }
 
 export interface Tower extends Entity {

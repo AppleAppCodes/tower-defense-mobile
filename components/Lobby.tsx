@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Play, Copy, Users, ArrowLeft, Globe } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Copy, Users, ArrowLeft, Globe, Wifi } from 'lucide-react';
 import { socketService } from '../services/socketService';
 
 interface LobbyProps {
@@ -11,16 +11,35 @@ interface LobbyProps {
 export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
   const [roomId, setRoomId] = useState('');
   const [status, setStatus] = useState<'IDLE' | 'CONNECTING' | 'WAITING'>('IDLE');
+  const [isConnected, setIsConnected] = useState(false);
+
+  // Connect on mount
+  useEffect(() => {
+    socketService.connect();
+
+    const checkConnection = setInterval(() => {
+        const connected = socketService.socket?.connected || false;
+        setIsConnected(connected);
+    }, 500);
+
+    return () => {
+        clearInterval(checkConnection);
+        // Note: We don't disconnect here to keep connection alive if match found
+    };
+  }, []);
 
   const handleJoin = () => {
     if (!roomId) return;
+    if (!isConnected) {
+        alert("Connecting to server... please wait.");
+        return;
+    }
+
     setStatus('CONNECTING');
-    
-    // Initialize socket connection
-    socketService.connect();
     
     // Listen for match start
     socketService.onMatchFound((data) => {
+        console.log("Lobby received match_found:", data);
         onMatchFound(data.role, data.gameId);
     });
 
@@ -52,6 +71,12 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
 
             {status === 'IDLE' && (
                 <div className="flex flex-col gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
+                    {/* Connection Status Indicator */}
+                    <div className={`text-[10px] text-center font-mono flex items-center justify-center gap-2 p-2 rounded ${isConnected ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                         <Wifi size={12} className={isConnected ? "" : "animate-pulse"} />
+                         {isConnected ? "SERVER ONLINE" : "CONNECTING TO SERVER..."}
+                    </div>
+
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase">Room Code</label>
                         <div className="flex gap-2">
@@ -70,15 +95,14 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
 
                     <button 
                         onClick={handleJoin}
-                        disabled={!roomId || roomId.length < 3}
+                        disabled={!roomId || roomId.length < 3 || !isConnected}
                         className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 transition-all active:scale-95"
                     >
                         <Users size={20} /> JOIN ROOM
                     </button>
                     
-                    <div className="text-[10px] text-center text-green-400 mt-2 font-mono flex items-center justify-center gap-1">
-                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                         Server: Hetzner Server (Live)
+                    <div className="text-[10px] text-center text-slate-500 mt-2 font-mono">
+                         Server: Cloudflare Secure
                     </div>
                 </div>
             )}
@@ -88,7 +112,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                     <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <h3 className="text-xl font-bold text-indigo-400">WAITING FOR OPPONENT...</h3>
                     <p className="text-slate-400 text-sm mt-2 font-mono">ROOM: {roomId}</p>
-                    <p className="text-xs text-slate-500 mt-4">Share this code with your friend.</p>
+                    <p className="text-xs text-slate-500 mt-4">Waiting for server response...</p>
+                    <button onClick={() => setStatus('IDLE')} className="mt-6 text-xs text-red-400 hover:underline">Cancel</button>
                 </div>
             )}
         </div>
