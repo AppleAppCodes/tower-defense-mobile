@@ -1,152 +1,126 @@
-// Sprite Sheet Service - Handles loading and rendering of sprite sheets
+// Sprite Service - Handles loading and rendering of tower sprites
+// Simplified version for single static images
 
-export interface SpriteConfig {
-  src: string;           // Path to sprite sheet
-  frameWidth: number;    // Width of single frame
-  frameHeight: number;   // Height of single frame
-  totalFrames: number;   // Total frames in sheet
-  columns: number;       // Frames per row (for grid layouts)
-  type: 'rotation' | 'animation'; // rotation = select by angle, animation = play sequence
-}
-
-export interface LoadedSprite {
+export interface StaticSprite {
   image: HTMLImageElement;
-  config: SpriteConfig;
   loaded: boolean;
+  width: number;
+  height: number;
 }
 
-// Sprite configurations for each tower type and era
-export const SPRITE_CONFIGS: Record<string, SpriteConfig> = {
-  // Stone Age (Era 0)
-  'AOE_0': {
-    src: '/sprites/rock-thrower.png',
-    frameWidth: 512,
-    frameHeight: 512,
-    totalFrames: 43,
-    columns: 43, // All frames in one row (horizontal strip)
-    type: 'rotation'
-  },
-  // Add more sprites here as you create them:
-  // 'BASIC_0': { src: '/sprites/slinger.png', ... },
-  // 'RAPID_0': { src: '/sprites/hunter.png', ... },
+// Store loaded sprites
+const sprites: Map<string, StaticSprite> = new Map();
+
+// Base64 embedded sprites - paste your image data here!
+// To convert an image to Base64: https://www.base64-image.de/
+const EMBEDDED_SPRITES: Record<string, string> = {
+  // Paste your Base64 data here like this:
+  // 'AOE_0': 'data:image/png;base64,iVBORw0KGgo...',
+};
+
+// File-based sprites (alternative to Base64)
+const FILE_SPRITES: Record<string, string> = {
+  'AOE_0': '/sprites/rock-thrower.png',
+  // Add more: 'BASIC_0': '/sprites/slinger.png',
 };
 
 class SpriteService {
-  private sprites: Map<string, LoadedSprite> = new Map();
-  private loadPromises: Map<string, Promise<LoadedSprite>> = new Map();
+  private initPromise: Promise<void> | null = null;
 
-  // Load a sprite sheet
-  async loadSprite(key: string): Promise<LoadedSprite | null> {
-    // Already loaded?
-    if (this.sprites.has(key)) {
-      return this.sprites.get(key)!;
+  // Initialize and load all sprites
+  async init(): Promise<void> {
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this.loadAllSprites();
+    return this.initPromise;
+  }
+
+  private async loadAllSprites(): Promise<void> {
+    const loadPromises: Promise<void>[] = [];
+
+    // Load embedded Base64 sprites first (higher priority)
+    for (const [key, base64] of Object.entries(EMBEDDED_SPRITES)) {
+      loadPromises.push(this.loadImage(key, base64));
     }
 
-    // Already loading?
-    if (this.loadPromises.has(key)) {
-      return this.loadPromises.get(key)!;
+    // Load file-based sprites (only if not already embedded)
+    for (const [key, path] of Object.entries(FILE_SPRITES)) {
+      if (!EMBEDDED_SPRITES[key]) {
+        loadPromises.push(this.loadImage(key, path));
+      }
     }
 
-    // Config exists?
-    const config = SPRITE_CONFIGS[key];
-    if (!config) {
-      console.warn(`No sprite config for: ${key}`);
-      return null;
-    }
+    await Promise.all(loadPromises);
+    console.log(`Loaded ${sprites.size} sprites`);
+  }
 
-    // Start loading
-    const loadPromise = new Promise<LoadedSprite>((resolve) => {
+  private loadImage(key: string, src: string): Promise<void> {
+    return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
-        const sprite: LoadedSprite = {
+        sprites.set(key, {
           image: img,
-          config,
-          loaded: true
-        };
-        this.sprites.set(key, sprite);
-        this.loadPromises.delete(key);
-        console.log(`Sprite loaded: ${key}`);
-        resolve(sprite);
+          loaded: true,
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        });
+        console.log(`✓ Sprite loaded: ${key} (${img.naturalWidth}x${img.naturalHeight})`);
+        resolve();
       };
       img.onerror = () => {
-        console.warn(`Failed to load sprite: ${key} from ${config.src}`);
-        this.loadPromises.delete(key);
-        resolve({ image: img, config, loaded: false });
+        console.warn(`✗ Failed to load sprite: ${key}`);
+        sprites.set(key, { image: img, loaded: false, width: 0, height: 0 });
+        resolve();
       };
-      img.src = config.src;
+      img.src = src;
     });
-
-    this.loadPromises.set(key, loadPromise);
-    return loadPromise;
   }
 
-  // Preload all configured sprites
-  async preloadAll(): Promise<void> {
-    const keys = Object.keys(SPRITE_CONFIGS);
-    await Promise.all(keys.map(key => this.loadSprite(key)));
-    console.log(`Preloaded ${keys.length} sprites`);
-  }
-
-  // Get sprite if loaded (sync)
-  getSprite(key: string): LoadedSprite | null {
-    return this.sprites.get(key) || null;
-  }
-
-  // Check if sprite is available
+  // Check if a sprite is available
   hasSprite(key: string): boolean {
-    const sprite = this.sprites.get(key);
-    return sprite?.loaded ?? false;
+    return sprites.get(key)?.loaded ?? false;
   }
 
-  // Draw a sprite frame to canvas
+  // Draw sprite centered at position
+  // Returns true if drawn, false if fallback needed
   drawSprite(
     ctx: CanvasRenderingContext2D,
     key: string,
     x: number,
     y: number,
-    rotation: number = 0, // Radians (for rotation type sprites)
-    frame: number = 0,    // For animation type sprites
-    scale: number = 1
+    size: number = 50 // Target size in pixels
   ): boolean {
-    const sprite = this.sprites.get(key);
-    if (!sprite?.loaded) {
-      return false; // Sprite not loaded, caller should use fallback
-    }
+    const sprite = sprites.get(key);
+    if (!sprite?.loaded) return false;
 
-    const { image, config } = sprite;
-    let frameIndex: number;
+    const { image, width, height } = sprite;
 
-    if (config.type === 'rotation') {
-      // Convert rotation (radians) to frame index
-      // Normalize rotation to 0-2π
-      let normalizedRotation = rotation % (Math.PI * 2);
-      if (normalizedRotation < 0) normalizedRotation += Math.PI * 2;
+    // Calculate scale to fit target size (maintain aspect ratio)
+    const scale = size / Math.max(width, height);
+    const drawWidth = width * scale;
+    const drawHeight = height * scale;
 
-      // Map to frame (0 = right, going clockwise)
-      frameIndex = Math.floor((normalizedRotation / (Math.PI * 2)) * config.totalFrames);
-      frameIndex = Math.min(frameIndex, config.totalFrames - 1);
-    } else {
-      // Animation - use provided frame
-      frameIndex = frame % config.totalFrames;
-    }
+    // Draw shadow first
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + drawHeight * 0.4, drawWidth * 0.35, drawHeight * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Calculate source position in sprite sheet
-    const col = frameIndex % config.columns;
-    const row = Math.floor(frameIndex / config.columns);
-    const sx = col * config.frameWidth;
-    const sy = row * config.frameHeight;
-
-    // Draw centered at x, y
-    const drawWidth = config.frameWidth * scale;
-    const drawHeight = config.frameHeight * scale;
-
+    // Draw sprite centered
     ctx.drawImage(
       image,
-      sx, sy, config.frameWidth, config.frameHeight,
-      x - drawWidth / 2, y - drawHeight / 2, drawWidth, drawHeight
+      x - drawWidth / 2,
+      y - drawHeight / 2,
+      drawWidth,
+      drawHeight
     );
 
     return true;
+  }
+
+  // Add a sprite dynamically (for runtime loading)
+  addBase64Sprite(key: string, base64Data: string): Promise<void> {
+    return this.loadImage(key, base64Data);
   }
 }
 

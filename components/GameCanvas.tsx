@@ -67,16 +67,10 @@ const generateWaveEnemies = (wave: number) => {
 
 // --- DRAWING ---
 const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gameTime: number) => {
-  // Try sprite first (scale 0.12 = 512px -> ~60px to fit grid)
+  // Try sprite first - new simplified API
   const spriteKey = `${tower.type}_${era}`;
-  if (spriteService.drawSprite(ctx, spriteKey, 0, 0, tower.rotation, 0, 0.12)) {
-    // Sprite drawn successfully, add shadow underneath
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath();
-    ctx.ellipse(0, 15, 18, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
+  if (spriteService.drawSprite(ctx, spriteKey, 0, 0, 55)) {
+    // Sprite drawn with shadow included
     return;
   }
 
@@ -259,8 +253,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     if (sceneryRef.current.length === 0) {
         for (let i = 0; i < 60; i++) sceneryRef.current.push({ x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT, r: Math.random() * 10 + 5, type: Math.random() > 0.9 ? 'rock' : 'tree' });
     }
-    // Preload all sprites
-    spriteService.preloadAll();
+    // Initialize sprite service (loads all configured sprites)
+    spriteService.init();
   }, []);
 
   // Initialize Logic (Only on Start Button Click)
