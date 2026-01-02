@@ -34,13 +34,13 @@ io.on("connection", (socket) => {
       // Create new room, player is DEFENDER
       rooms[roomId] = { defender: socket.id, attacker: null };
       socket.join(roomId);
-      socket.emit("match_found", { role: "DEFENDER", gameId: roomId });
+    
       console.log(`Room ${roomId} created by Defender ${socket.id}`);
     } else if (!room.attacker) {
       // Join existing room, player is ATTACKER
-      rooms[roomId].attacker = socket.id;
       socket.join(roomId);
       socket.emit("match_found", { role: "ATTACKER", gameId: roomId });
+            io.to(room.defender).emit("match_found", { role: "DEFENDER", gameId: roomId });
       
       // Notify Defender that Attacker arrived
       io.to(room.defender).emit("opponent_joined");
