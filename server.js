@@ -1,22 +1,26 @@
 import { createServer } from "http";
 import { Server } from "socket.io";
 
-// Create HTTP Server that handles basic requests (Health Check)
+// Minimal HTTP Server (Health Check Only)
+// This server does NOT serve any frontend files (index.html, etc.)
 const httpServer = createServer((req, res) => {
   if (req.url === '/health' || req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Game Server is RUNNING (Port 3000)');
+    res.end('Game Server OK');
   } else {
+    // If it's not a socket request (which io handles automatically) and not health, 404.
     res.writeHead(404);
     res.end();
   }
 });
 
+// Socket.io Setup with permissive CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: "*", // Allow connections from ANY domain (Vercel, localhost, etc.)
     methods: ["GET", "POST"]
   },
+  // Allow both transports to be safe, though client forces websocket
   transports: ['polling', 'websocket']
 });
 
@@ -87,6 +91,8 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+// Strict binding to 0.0.0.0 is crucial for Docker/Coolify networking
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`Game Server running on port ${PORT}`);
 });
