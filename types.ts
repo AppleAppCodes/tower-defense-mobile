@@ -4,8 +4,18 @@ export type Vector2D = { x: number; y: number };
 
 export type GameMode = 'DEFENSE' | 'ATTACK' | 'PVP_LOCAL' | 'PVP_ONLINE';
 
-export type PvpPhase = 'P1_BUILD' | 'HANDOVER_TO_P2' | 'P2_ATTACK' | 'P2_BUILD' | 'HANDOVER_TO_P1' | 'P1_ATTACK' | 'GAME_OVER' 
-                     | 'ONLINE_WAITING' | 'ONLINE_BUILDING' | 'ONLINE_ATTACKING' | 'ONLINE_SPECTATING';
+export type PvpPhase = 'P1_BUILD' | 'HANDOVER_TO_P2' | 'P2_ATTACK' | 'P2_BUILD' | 'HANDOVER_TO_P1' | 'P1_ATTACK' | 'GAME_OVER'
+                     | 'ONLINE_WAITING' | 'ONLINE_PLAYING' | 'ONLINE_SPECTATING';
+
+// New: Opponent's visible state for spectator mode
+export interface OpponentState {
+  lives: number;
+  wave: number;
+  era: number;
+  towers: { position: Vector2D; type: string; level: number }[];
+  enemies: { position: Vector2D; type: string; hp: number; maxHp: number }[];
+  isGameOver: boolean;
+}
 
 export enum TowerType {
   BASIC = 'BASIC',
@@ -171,16 +181,31 @@ export interface WaveConfig {
   enemyType: EnemyType;
 }
 
+// Wave sync data for synchronized multiplayer
+export interface WaveData {
+  wave: number;
+  enemies: { type: EnemyType; delay: number }[];
+  seed: number; // For deterministic sync
+}
+
 // Socket Events Payloads
 export interface ServerToClientEvents {
-  match_found: (data: { role: 'DEFENDER' | 'ATTACKER', gameId: string }) => void;
-  opponent_action: (action: { type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER' | 'TOWER_BUILD', payload: any }) => void;
+  match_found: (data: { role: 'PLAYER', gameId: string, playerNumber: 1 | 2 }) => void;
+  opponent_joined: () => void;
+  game_start: (data: { waveData: WaveData }) => void;
+  wave_sync: (data: WaveData) => void;
+  opponent_state: (state: OpponentState) => void;
+  opponent_lost: (data: { wave: number }) => void;
+  opponent_disconnected: () => void;
   room_error: (msg: string) => void;
 }
 
 export interface ClientToServerEvents {
   join_game: (roomId: string, callback?: (response: any) => void) => void;
-  send_action: (data: { gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER' | 'TOWER_BUILD', payload: any }) => void;
+  player_ready: (gameId: string) => void;
+  state_update: (data: { gameId: string, state: OpponentState }) => void;
+  player_lost: (data: { gameId: string, wave: number }) => void;
+  request_next_wave: (gameId: string) => void;
 }
 
 // Telegram Web App Global Types

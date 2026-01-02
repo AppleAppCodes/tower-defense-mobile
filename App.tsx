@@ -14,7 +14,7 @@ const App: React.FC = () => {
   
   // Online State
   const [onlineGameId, setOnlineGameId] = useState<string | undefined>(undefined);
-  const [onlineRole, setOnlineRole] = useState<'DEFENDER' | 'ATTACKER' | undefined>(undefined);
+  const [onlinePlayerNumber, setOnlinePlayerNumber] = useState<1 | 2 | undefined>(undefined);
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -54,8 +54,8 @@ const App: React.FC = () => {
       setView('LOBBY');
   };
 
-  const handleMatchFound = (role: 'DEFENDER' | 'ATTACKER', gameId: string) => {
-      setOnlineRole(role);
+  const handleMatchFound = (playerNumber: 1 | 2, gameId: string) => {
+      setOnlinePlayerNumber(playerNumber);
       setOnlineGameId(gameId);
       setGameMode('PVP_ONLINE');
       setView('GAME');
@@ -65,7 +65,7 @@ const App: React.FC = () => {
       if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.selectionChanged();
       setView('MENU');
       setOnlineGameId(undefined);
-      setOnlineRole(undefined);
+      setOnlinePlayerNumber(undefined);
   };
 
   return (
@@ -76,11 +76,11 @@ const App: React.FC = () => {
           <Lobby onBack={handleBackToMenu} onMatchFound={handleMatchFound} />
       ) : (
           <div className="relative w-full h-full animate-in fade-in duration-300">
-            <GameCanvas 
-                onGameOver={handleGameOver} 
-                initialMode={gameMode} 
+            <GameCanvas
+                onGameOver={handleGameOver}
+                initialMode={gameMode}
                 onlineGameId={onlineGameId}
-                onlineRole={onlineRole}
+                onlinePlayerNumber={onlinePlayerNumber}
             />
              <button 
                 onClick={handleBackToMenu}

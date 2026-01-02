@@ -1,20 +1,21 @@
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, MapDefinition, FloatingText, GameMode } from '../types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, THEMES, ERA_DATA, UNIT_TYPES } from '../constants';
+import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, MapDefinition, FloatingText, GameMode, OpponentState, WaveData } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, THEMES, ERA_DATA } from '../constants';
 import { audioService } from '../services/audioService';
 import { socketService } from '../services/socketService';
-import { Heart, Coins, Play, Check, ArrowUpCircle, Sword, Wifi, PlayCircle, Clock, Home, Zap, FastForward, Users } from 'lucide-react';
+import { Heart, Coins, Play, Check, ArrowUpCircle, Wifi, PlayCircle, Clock, Home, Zap, FastForward, Users, Eye, ChevronRight, Trophy } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
   initialMode?: GameMode;
   onlineGameId?: string;
-  onlineRole?: 'DEFENDER' | 'ATTACKER';
+  onlinePlayerNumber?: 1 | 2;
 }
 
 // --- CONSTANTS ---
 const BUILD_PHASE_DURATION = 600; // 10 Seconds (60fps)
+const STATE_SYNC_INTERVAL = 10; // Send state every 10 frames
 
 // --- HELPER FUNCTIONS ---
 const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[]) => {
@@ -47,11 +48,11 @@ const createNoisePattern = (ctx: CanvasRenderingContext2D, color: string) => {
     return ctx.createPattern(canvas, 'repeat');
 };
 
+// Local wave generation (for solo mode only)
 const generateWaveEnemies = (wave: number) => {
     const baseCount = 5 + Math.floor(wave * 2);
     const queue: { type: EnemyType; delay: number }[] = [];
-    
-    // Constant intervals for standard AI waves
+
     if (wave % 5 === 0) {
         queue.push({ type: EnemyType.BOSS, delay: 0 });
         for(let i=0; i<5; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
@@ -74,11 +75,11 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
 
   // Base
   ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(0, 8, 14, 6, 0, 0, Math.PI*2); ctx.fill();
-  
+
   if (era === 0) { // Stone Age
       ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
       ctx.strokeStyle = '#78350f'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2); ctx.fill(); // Head
+      ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2); ctx.fill();
   } else if (era === 1) { // Castle
       ctx.fillStyle = '#64748b'; ctx.fillRect(-14, -14, 28, 28);
       ctx.strokeStyle = '#334155'; ctx.strokeRect(-14, -14, 28, 28);
@@ -108,31 +109,31 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
 
 const drawEnemySprite = (ctx: CanvasRenderingContext2D, enemy: Enemy, era: number, gameTime: number) => {
     ctx.save();
-    
+
     // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.3)'; 
-    ctx.beginPath(); 
-    ctx.ellipse(0, 5, enemy.radius * 0.6, enemy.radius * 0.3, 0, 0, Math.PI*2); 
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(0, 5, enemy.radius * 0.6, enemy.radius * 0.3, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // Walking Animation (Legs)
+    // Walking Animation
     const walkSpeed = enemy.type === EnemyType.FAST ? 0.4 : 0.2;
     const walkCycle = Math.sin(gameTime * walkSpeed);
     const bob = Math.abs(walkCycle) * 2;
-    
+
     ctx.translate(0, -bob);
 
-    // --- LEGS ---
-    ctx.strokeStyle = '#1e293b'; // Dark pants
+    // Legs
+    ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
-    
+
     ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-4, 8 + (walkCycle * 4)); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(4, 8 - (walkCycle * 4)); ctx.stroke();
 
-    // --- BODY & HEAD VARIATIONS ---
+    // Body variations
     if (enemy.type === EnemyType.FAST) {
-        ctx.rotate(15 * Math.PI / 180); 
+        ctx.rotate(15 * Math.PI / 180);
         ctx.fillStyle = enemy.color;
         ctx.beginPath(); ctx.roundRect(-6, -12, 12, 14, 4); ctx.fill();
         ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
@@ -199,24 +200,29 @@ const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
 };
 
 // --- GAME COMPONENT ---
-const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFENSE', onlineGameId, onlineRole }) => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFENSE', onlineGameId, onlinePlayerNumber }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mousePosRef = useRef<Vector2D | null>(null);
   const isPointerDownRef = useRef<boolean>(false);
   const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number }>({ width: CANVAS_WIDTH, height: CANVAS_HEIGHT });
-  
+
   const lastFrameTimeRef = useRef<number>(0);
   const accumulatorRef = useRef<number>(0);
   const bgPatternRef = useRef<CanvasPattern | null>(null);
   const sceneryRef = useRef<{x: number, y: number, r: number, type: 'tree' | 'rock' | 'bush'}[]>([]);
+
+  // SWIPE STATE FOR SPECTATOR MODE
+  const swipeStartRef = useRef<{ x: number; time: number } | null>(null);
+  const [isSpectating, setIsSpectating] = useState(false);
+  const [opponentState, setOpponentState] = useState<OpponentState | null>(null);
 
   // GAME STATE REFS
   const gameStateRef = useRef<GameState>({
     ...INITIAL_STATE,
     mode: initialMode,
     lives: 20,
-    money: initialMode === 'PVP_ONLINE' ? 600 : 100, // Higher starting money for PvP to get into action
+    money: initialMode === 'PVP_ONLINE' ? 600 : 100,
     wave: 1,
     gameTime: 0,
     era: 0,
@@ -227,14 +233,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     isGameOver: false,
     gameSpeed: 1
   });
-  
+
   // Entities Refs
   const towersRef = useRef<Tower[]>([]);
   const enemiesRef = useRef<Enemy[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const spawnQueueRef = useRef<{ type: EnemyType; delay: number }[]>([]);
-  
+  const waveFinishedRef = useRef<boolean>(false);
+
   // React State for UI
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
@@ -242,6 +249,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   const [currentMap, setCurrentMap] = useState<MapDefinition>(MAPS[0]);
   const [hasStartedGame, setHasStartedGame] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [waitingForOpponent, setWaitingForOpponent] = useState(false);
+  const [gameResult, setGameResult] = useState<'won' | 'lost' | null>(null);
 
   const triggerHaptic = (style: 'light' | 'medium' | 'error' | 'success') => {
     if (window.Telegram?.WebApp?.HapticFeedback) {
@@ -270,32 +279,67 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     const stats = ENEMY_STATS[type];
     const waveMult = 1 + (gameStateRef.current.wave * 0.1);
     enemiesRef.current.push({
-        id: Math.random().toString(36), position: { ...currentMap.waypoints[0] }, 
+        id: Math.random().toString(36), position: { ...currentMap.waypoints[0] },
         type: type, hp: stats.maxHp * waveMult, maxHp: stats.maxHp * waveMult, speed: stats.speed,
         pathIndex: 0, distanceTraveled: 0, frozen: 0, moneyReward: stats.reward, expReward: stats.expReward, color: stats.color, radius: stats.radius
     });
-    audioService.playAlarm(); // Sound effect when enemy spawned
   }, [currentMap]);
 
-  // --- SOCKET EVENT LISTENERS ---
+  // --- SOCKET EVENT LISTENERS FOR SYNCHRONIZED GAMEPLAY ---
   useEffect(() => {
-    if (!onlineGameId) return;
+    if (!onlineGameId || initialMode !== 'PVP_ONLINE') return;
 
-    socketService.onOpponentAction((action) => {
-        if (action.type === 'SPAWN') {
-             // Both Attacker (feedback) and Defender (threat) see the enemy
-             spawnLocalEnemy(action.payload.type);
-             setNotification({ title: "ENEMY SPOTTED", subtitle: "Opponent sent reinforcements!", color: "text-red-400" });
-             setTimeout(() => setNotification(null), 1500);
-        } else if (action.type === 'TOWER_BUILD') {
-             // Update towers for Attacker so they see what they are up against
-             if (onlineRole === 'ATTACKER') {
-                 towersRef.current.push(action.payload);
-                 audioService.playBuild();
-             }
-        }
+    // Game starts when both players are ready
+    socketService.onGameStart(({ waveData }) => {
+      console.log('Game starting with synced wave:', waveData);
+      setWaitingForOpponent(false);
+      gameStateRef.current.isPlaying = true;
+      gameStateRef.current.wave = waveData.wave;
+      spawnQueueRef.current = [...waveData.enemies];
+      waveFinishedRef.current = false;
+      audioService.playWaveStart(gameStateRef.current.era);
+      setNotification({ title: "WAVE " + waveData.wave, subtitle: "ENEMIES INCOMING!", color: "text-yellow-400" });
+      setTimeout(() => setNotification(null), 2000);
+      setUiState({ ...gameStateRef.current });
     });
-  }, [onlineGameId, onlineRole, spawnLocalEnemy]);
+
+    // Receive next wave sync
+    socketService.onWaveSync((waveData) => {
+      console.log('Wave sync received:', waveData);
+      gameStateRef.current.isPlaying = true;
+      gameStateRef.current.wave = waveData.wave;
+      spawnQueueRef.current = [...waveData.enemies];
+      waveFinishedRef.current = false;
+      audioService.playWaveStart(gameStateRef.current.era);
+      setNotification({ title: "WAVE " + waveData.wave, subtitle: "ENEMIES INCOMING!", color: "text-yellow-400" });
+      setTimeout(() => setNotification(null), 2000);
+      setUiState({ ...gameStateRef.current });
+    });
+
+    // Receive opponent state for spectator mode
+    socketService.onOpponentState((state) => {
+      setOpponentState(state);
+    });
+
+    // Opponent lost - we won!
+    socketService.onOpponentLost(({ wave }) => {
+      console.log('Opponent lost at wave:', wave);
+      gameStateRef.current.isGameOver = true;
+      setGameResult('won');
+      triggerHaptic('success');
+      setNotification({ title: "VICTORY!", subtitle: `Opponent fell at wave ${wave}`, color: "text-green-400" });
+      setUiState({ ...gameStateRef.current });
+    });
+
+    // Opponent disconnected
+    socketService.onOpponentDisconnected(() => {
+      setNotification({ title: "OPPONENT LEFT", subtitle: "You win by default!", color: "text-yellow-400" });
+      gameStateRef.current.isGameOver = true;
+      setGameResult('won');
+      setUiState({ ...gameStateRef.current });
+    });
+
+  }, [onlineGameId, initialMode]);
 
   // Initialize Game Logic
   const initializeGame = useCallback(() => {
@@ -311,41 +355,63 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
           exp: 0,
           maxExp: ERA_DATA[0].maxExp,
           autoStartTimer: BUILD_PHASE_DURATION,
-          isPlaying: initialMode === 'PVP_ONLINE', // PvP starts immediately
+          isPlaying: false,
           isGameOver: false,
           gameSpeed: 1
       };
-      
+
       towersRef.current = [];
       enemiesRef.current = [];
       projectilesRef.current = [];
       floatingTextsRef.current = [];
       spawnQueueRef.current = [];
+      waveFinishedRef.current = false;
+      setGameResult(null);
 
       setUiState({...gameStateRef.current});
       triggerHaptic('medium');
-  }, [initialMode]);
+
+      // For PVP Online, signal ready to server
+      if (initialMode === 'PVP_ONLINE' && onlineGameId) {
+        setWaitingForOpponent(true);
+        socketService.playerReady(onlineGameId);
+      }
+  }, [initialMode, onlineGameId]);
 
 
-  // --- START WAVE ---
+  // --- START WAVE (Solo mode only) ---
   const handleStartWave = useCallback(() => {
     const state = gameStateRef.current;
-    if (!state.isPlaying && !state.isGameOver) {
+    if (!state.isPlaying && !state.isGameOver && initialMode !== 'PVP_ONLINE') {
         state.isPlaying = true;
         state.autoStartTimer = -1;
-        
-        // Only generate AI enemies if NOT in PvP mode
-        if (initialMode !== 'PVP_ONLINE') {
-            const newEnemies = generateWaveEnemies(state.wave);
-            spawnQueueRef.current = newEnemies;
-        }
-        
+
+        const newEnemies = generateWaveEnemies(state.wave);
+        spawnQueueRef.current = newEnemies;
+
         audioService.playWaveStart(state.era);
         triggerHaptic('medium');
         setUiState(prev => ({ ...prev, isPlaying: true, autoStartTimer: -1 }));
         setCountdown(null);
     }
   }, [initialMode]);
+
+  // --- SEND STATE UPDATE FOR SPECTATING ---
+  const sendStateUpdate = useCallback(() => {
+    if (!onlineGameId || initialMode !== 'PVP_ONLINE') return;
+
+    const state = gameStateRef.current;
+    const opponentStateData: OpponentState = {
+      lives: state.lives,
+      wave: state.wave,
+      era: state.era,
+      towers: towersRef.current.map(t => ({ position: t.position, type: t.type, level: t.level })),
+      enemies: enemiesRef.current.map(e => ({ position: e.position, type: e.type, hp: e.hp, maxHp: e.maxHp })),
+      isGameOver: state.isGameOver
+    };
+
+    socketService.sendStateUpdate(onlineGameId, opponentStateData);
+  }, [onlineGameId, initialMode]);
 
   // --- UPDATE LOOP ---
   const update = useCallback(() => {
@@ -360,30 +426,35 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         }
     }
 
-    // 2. PASSIVE INCOME FOR ATTACKER (To keep sending units)
-    if (initialMode === 'PVP_ONLINE' && onlineRole === 'ATTACKER' && state.gameTime % 60 === 0) {
-        state.money += 5; // Passive drip
-    }
-
-    // 3. GAME PHYSICS
+    // 2. GAME PHYSICS
     const loops = state.gameSpeed;
     for (let loop = 0; loop < loops; loop++) {
         state.gameTime++;
-        
-        // Spawning (Solo AI Only)
-        if (state.isPlaying && initialMode !== 'PVP_ONLINE') {
+
+        // Spawning from queue
+        if (state.isPlaying) {
             const queue = spawnQueueRef.current;
             if (queue.length > 0) {
                 if (queue[0].delay <= 0) {
                     const nextEnemy = queue.shift();
                     if (nextEnemy) spawnLocalEnemy(nextEnemy.type);
                 } else queue[0].delay--;
-            } else if (enemiesRef.current.length === 0) {
+            } else if (enemiesRef.current.length === 0 && !waveFinishedRef.current) {
+                // Wave complete
+                waveFinishedRef.current = true;
                 state.isPlaying = false;
-                state.wave++;
                 state.money += 150 + (state.wave * 25);
-                state.autoStartTimer = BUILD_PHASE_DURATION;
-                setNotification({ title: "WAVE COMPLETE", subtitle: "PREPARE DEFENSES", color: "text-green-400" });
+
+                if (initialMode === 'PVP_ONLINE' && onlineGameId) {
+                    // Request next wave from server
+                    socketService.requestNextWave(onlineGameId);
+                    setNotification({ title: "WAVE COMPLETE", subtitle: "WAITING FOR OPPONENT...", color: "text-green-400" });
+                } else {
+                    // Solo mode - continue locally
+                    state.wave++;
+                    state.autoStartTimer = BUILD_PHASE_DURATION;
+                    setNotification({ title: "WAVE COMPLETE", subtitle: "PREPARE DEFENSES", color: "text-green-400" });
+                }
                 setTimeout(() => setNotification(null), 2500);
                 audioService.playBuild();
             }
@@ -411,16 +482,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         // Move Enemies
         for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
             const enemy = enemiesRef.current[i];
-            const target = currentMap.waypoints[enemy.pathIndex + 1]; 
+            const target = currentMap.waypoints[enemy.pathIndex + 1];
             if (!target) {
-                state.lives--; 
+                state.lives--;
                 if (loop === 0) { triggerHaptic('error'); audioService.playDamage(); }
                 enemiesRef.current.splice(i, 1);
-                if (state.lives <= 0) { state.isGameOver = true; onGameOver(state.wave); }
+
+                // Check game over
+                if (state.lives <= 0) {
+                    state.isGameOver = true;
+                    setGameResult('lost');
+
+                    // Notify server that we lost
+                    if (initialMode === 'PVP_ONLINE' && onlineGameId) {
+                        socketService.sendPlayerLost(onlineGameId, state.wave);
+                    }
+
+                    onGameOver(state.wave);
+                }
                 continue;
             }
             const dist = Math.hypot(enemy.position.x - target.x, enemy.position.y - target.y);
-            if (dist <= enemy.speed) { enemy.position = { ...target }; enemy.pathIndex++; } 
+            if (dist <= enemy.speed) { enemy.position = { ...target }; enemy.pathIndex++; }
             else {
                 const angle = Math.atan2(target.y - enemy.position.y, target.x - enemy.position.x);
                 enemy.position.x += Math.cos(angle) * enemy.speed; enemy.position.y += Math.sin(angle) * enemy.speed;
@@ -456,12 +539,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                 enemiesRef.current.splice(i, 1);
             }
         }
-        
+
         // Floating Text
         for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
             const ft = floatingTextsRef.current[i]; ft.life -= 0.02; ft.position.y += ft.velocity.y;
             if (ft.life <= 0) floatingTextsRef.current.splice(i, 1);
         }
+    }
+
+    // Send state update for spectating (every N frames)
+    if (state.gameTime % STATE_SYNC_INTERVAL === 0 && initialMode === 'PVP_ONLINE') {
+        sendStateUpdate();
     }
 
     // UI Sync
@@ -474,7 +562,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         }
     }
 
-  }, [onGameOver, currentMap, hasStartedGame, handleStartWave, initialMode, onlineRole, spawnLocalEnemy]);
+  }, [onGameOver, currentMap, hasStartedGame, handleStartWave, initialMode, onlineGameId, spawnLocalEnemy, sendStateUpdate]);
 
   // --- RENDERING LOOP ---
   const calculateTransform = () => {
@@ -483,15 +571,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       return { scale, offsetX: (width - CANVAS_WIDTH * scale) / 2, offsetY: (height - CANVAS_HEIGHT * scale) / 2 };
   };
 
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const ctx = canvas.getContext('2d'); if (!ctx) return;
-    const { scale, offsetX, offsetY } = calculateTransform();
+  // Draw opponent's game (for spectator mode)
+  const drawOpponentGame = (ctx: CanvasRenderingContext2D, scale: number, offsetX: number, offsetY: number) => {
+    if (!opponentState) return;
+
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Background
-    ctx.fillStyle = THEMES[0].background; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.save(); ctx.translate(offsetX, offsetY); ctx.scale(scale, scale);
-    if (bgPatternRef.current) { ctx.fillStyle = bgPatternRef.current; ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT); } 
+    if (bgPatternRef.current) {
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = bgPatternRef.current;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.globalAlpha = 1;
+    }
 
     // Path
     if (currentMap.waypoints.length > 0) {
@@ -500,33 +598,104 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         for (let i = 1; i < currentMap.waypoints.length; i++) ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
         ctx.stroke();
     }
-    
-    // Entities
-    sceneryRef.current.forEach(item => { ctx.fillStyle = item.type === 'tree' ? '#14532d' : '#57534e'; ctx.beginPath(); ctx.arc(item.x, item.y, item.r, 0, Math.PI*2); ctx.fill(); });
-    towersRef.current.forEach(tower => { ctx.save(); ctx.translate(tower.position.x, tower.position.y); drawTower(ctx, tower, gameStateRef.current.era, gameStateRef.current.gameTime); ctx.restore(); });
-    enemiesRef.current.forEach(enemy => { ctx.save(); ctx.translate(enemy.position.x, enemy.position.y); drawEnemySprite(ctx, enemy, gameStateRef.current.era, gameStateRef.current.gameTime); ctx.restore(); });
-    projectilesRef.current.forEach(proj => drawProjectile(ctx, proj, gameStateRef.current.era));
-    floatingTextsRef.current.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = 'bold 16px Arial'; ctx.fillText(ft.text, ft.position.x, ft.position.y); });
 
-    // Ghost Tower (Placement Preview) - ONLY DEFENDER CAN BUILD
-    if (selectedTowerType && mousePosRef.current && hasStartedGame && !gameStateRef.current.isGameOver && onlineRole !== 'ATTACKER') {
-        const gx = Math.floor(mousePosRef.current.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-        const gy = Math.floor(mousePosRef.current.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-        const config = TOWER_TYPES[selectedTowerType];
-        
-        ctx.beginPath(); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.arc(gx, gy, config.range, 0, Math.PI * 2); ctx.fill();
-        const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 35, currentMap.waypoints) && !towersRef.current.some(t => Math.hypot(t.position.x - gx, t.position.y - gy) < 20);
-        
-        ctx.save(); ctx.translate(gx, gy); ctx.globalAlpha = 0.6;
-        const mock: Tower = { id:'p', position:{x:gx, y:gy}, type:selectedTowerType, level:1, lastShotFrame:0, range:0, damage:0, cooldown:0, rotation:0, eraBuilt:0};
-        drawTower(ctx, mock, gameStateRef.current.era, 0); 
+    // Opponent's towers (simplified)
+    opponentState.towers.forEach(tower => {
+        ctx.save();
+        ctx.translate(tower.position.x, tower.position.y);
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath();
+        ctx.arc(0, 0, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2;
+        ctx.stroke();
         ctx.restore();
-        
-        ctx.fillStyle = isValid ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-        ctx.beginPath(); ctx.arc(gx, gy, 15, 0, Math.PI * 2); ctx.fill();
-    }
+    });
+
+    // Opponent's enemies (simplified)
+    opponentState.enemies.forEach(enemy => {
+        ctx.save();
+        ctx.translate(enemy.position.x, enemy.position.y);
+        ctx.fillStyle = ENEMY_STATS[enemy.type as EnemyType]?.color || '#ef4444';
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // HP bar
+        const hpPct = enemy.hp / enemy.maxHp;
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-10, -20, 20, 4);
+        ctx.fillStyle = hpPct < 0.3 ? '#ef4444' : '#22c55e';
+        ctx.fillRect(-9, -19, 18 * hpPct, 2);
+        ctx.restore();
+    });
+
+    // Opponent info overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(10, 10, 150, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Arial';
+    ctx.fillText('OPPONENT', 20, 30);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillText(`❤️ ${opponentState.lives}`, 20, 50);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText(`Wave ${opponentState.wave}`, 80, 50);
+
     ctx.restore();
-  }, [currentMap, selectedTowerType, canvasDimensions, hasStartedGame, onlineRole]);
+  };
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d'); if (!ctx) return;
+    const { scale, offsetX, offsetY } = calculateTransform();
+
+    // Clear canvas
+    ctx.fillStyle = THEMES[0].background; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (isSpectating && opponentState) {
+        // Draw opponent's game when spectating
+        drawOpponentGame(ctx, scale, offsetX, offsetY);
+    } else {
+        // Draw own game
+        ctx.save(); ctx.translate(offsetX, offsetY); ctx.scale(scale, scale);
+        if (bgPatternRef.current) { ctx.fillStyle = bgPatternRef.current; ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT); }
+
+        // Path
+        if (currentMap.waypoints.length > 0) {
+            ctx.strokeStyle = THEMES[0].pathInner; ctx.lineWidth = 60; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath(); ctx.moveTo(currentMap.waypoints[0].x, currentMap.waypoints[0].y);
+            for (let i = 1; i < currentMap.waypoints.length; i++) ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
+            ctx.stroke();
+        }
+
+        // Entities
+        sceneryRef.current.forEach(item => { ctx.fillStyle = item.type === 'tree' ? '#14532d' : '#57534e'; ctx.beginPath(); ctx.arc(item.x, item.y, item.r, 0, Math.PI*2); ctx.fill(); });
+        towersRef.current.forEach(tower => { ctx.save(); ctx.translate(tower.position.x, tower.position.y); drawTower(ctx, tower, gameStateRef.current.era, gameStateRef.current.gameTime); ctx.restore(); });
+        enemiesRef.current.forEach(enemy => { ctx.save(); ctx.translate(enemy.position.x, enemy.position.y); drawEnemySprite(ctx, enemy, gameStateRef.current.era, gameStateRef.current.gameTime); ctx.restore(); });
+        projectilesRef.current.forEach(proj => drawProjectile(ctx, proj, gameStateRef.current.era));
+        floatingTextsRef.current.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = 'bold 16px Arial'; ctx.fillText(ft.text, ft.position.x, ft.position.y); });
+
+        // Ghost Tower (Placement Preview)
+        if (selectedTowerType && mousePosRef.current && hasStartedGame && !gameStateRef.current.isGameOver) {
+            const gx = Math.floor(mousePosRef.current.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+            const gy = Math.floor(mousePosRef.current.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+            const config = TOWER_TYPES[selectedTowerType];
+
+            ctx.beginPath(); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.arc(gx, gy, config.range, 0, Math.PI * 2); ctx.fill();
+            const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 35, currentMap.waypoints) && !towersRef.current.some(t => Math.hypot(t.position.x - gx, t.position.y - gy) < 20);
+
+            ctx.save(); ctx.translate(gx, gy); ctx.globalAlpha = 0.6;
+            const mock: Tower = { id:'p', position:{x:gx, y:gy}, type:selectedTowerType, level:1, lastShotFrame:0, range:0, damage:0, cooldown:0, rotation:0, eraBuilt:0};
+            drawTower(ctx, mock, gameStateRef.current.era, 0);
+            ctx.restore();
+
+            ctx.fillStyle = isValid ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+            ctx.beginPath(); ctx.arc(gx, gy, 15, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+    }
+  }, [currentMap, selectedTowerType, canvasDimensions, hasStartedGame, isSpectating, opponentState]);
 
   // --- INPUT HANDLERS ---
   const getCanvasCoordinates = (clientX: number, clientY: number) => {
@@ -540,17 +709,43 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     (e.target as Element).setPointerCapture(e.pointerId);
     isPointerDownRef.current = true;
     mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY);
+
+    // Track swipe start for spectator mode
+    swipeStartRef.current = { x: e.clientX, time: Date.now() };
   };
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => { mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY); };
-  
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    mousePosRef.current = getCanvasCoordinates(e.clientX, e.clientY);
+
+    // Check for swipe gesture (only in PVP mode)
+    if (initialMode === 'PVP_ONLINE' && swipeStartRef.current && isPointerDownRef.current) {
+        const dx = e.clientX - swipeStartRef.current.x;
+        const threshold = 100; // pixels
+
+        if (dx < -threshold && !isSpectating) {
+            // Swipe left - return to own game
+            setIsSpectating(false);
+            swipeStartRef.current = null;
+            triggerHaptic('light');
+        } else if (dx > threshold && !isSpectating && opponentState) {
+            // Swipe right - view opponent
+            setIsSpectating(true);
+            swipeStartRef.current = null;
+            triggerHaptic('light');
+        }
+    }
+  };
+
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     isPointerDownRef.current = false;
-    // ATTACKER CANNOT CLICK MAP TO BUILD
-    if (onlineRole === 'ATTACKER') return;
+    swipeStartRef.current = null;
+
+    // Don't place towers while spectating
+    if (isSpectating) return;
 
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos || !selectedTowerType) return;
-    
+
     // Logic to place tower:
     const gx = Math.floor(pos.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
     const gy = Math.floor(pos.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
@@ -559,7 +754,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
     // Check Validity
     const isValid = state.money >= config.cost && !isPointOnPath(gx, gy, 35, currentMap.waypoints) && !towersRef.current.some(t => Math.hypot(t.position.x - gx, t.position.y - gy) < 20);
-    
+
     if (isValid) {
         state.money -= config.cost;
         const newTower: Tower = {
@@ -567,16 +762,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
             range: config.range, damage: config.damage, cooldown: config.cooldown, lastShotFrame: 0, rotation: 0, level: 1, eraBuilt: state.era
         };
         towersRef.current.push(newTower);
-        
-        // Notify Attacker
-        if (onlineGameId) {
-            socketService.sendAction(onlineGameId, 'TOWER_BUILD', newTower);
-        }
 
         audioService.playBuild();
         triggerHaptic('light');
-        setUiState({...state}); 
-        setSelectedTowerType(null); 
+        setUiState({...state});
+        setSelectedTowerType(null);
     } else {
         triggerHaptic('error');
     }
@@ -603,27 +793,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     setUiState({ ...state });
   }, []);
 
-  // --- ATTACKER ACTION ---
-  const handleBuyUnit = (unitKey: string) => {
-      const config = UNIT_TYPES[unitKey];
-      const state = gameStateRef.current;
-      
-      if (state.money >= config.cost) {
-          state.money -= config.cost;
-          triggerHaptic('medium');
-          setUiState({...state});
-          
-          // Send to Server
-          if (onlineGameId) {
-              socketService.sendAction(onlineGameId, 'SPAWN', { type: config.type });
-          }
-          // Spawn locally for visual feedback
-          spawnLocalEnemy(config.type);
-      } else {
-          triggerHaptic('error');
-      }
-  };
-
   // --- RAF LOOP ---
   useEffect(() => {
     let frameId: number;
@@ -644,39 +813,46 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
   // --- JSX RENDER ---
   const canEvolve = uiState.era < 2 && uiState.exp >= uiState.maxExp;
-  const isAttacker = onlineRole === 'ATTACKER';
-  const isDefender = onlineRole === 'DEFENDER' || !onlineRole;
 
   return (
     <div className="flex flex-col gap-2 w-full h-full overflow-hidden box-border bg-[#1c1917]">
       <div ref={containerRef} className="flex-1 relative group flex-shrink-0 mx-auto w-full h-full flex justify-center items-center overflow-hidden bg-black shadow-2xl">
-        <canvas 
+        <canvas
             ref={canvasRef} width={canvasDimensions.width} height={canvasDimensions.height}
-            onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={() => { isPointerDownRef.current = false; mousePosRef.current = null; }}
+            onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerLeave={() => { isPointerDownRef.current = false; mousePosRef.current = null; swipeStartRef.current = null; }}
             className="block w-full h-full" style={{ touchAction: 'none' }}
         />
-        
+
         {/* TOP HUD */}
         {hasStartedGame && !uiState.isGameOver && (
             <>
                 <div className="absolute top-2 left-2 right-2 flex items-start justify-between pointer-events-none z-10">
-                    {/* Role Badge */}
-                    {onlineRole && (
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm ${isAttacker ? 'bg-red-950/80 border-red-500/30' : 'bg-blue-950/80 border-blue-500/30'}`}>
-                             {isAttacker ? <Sword size={14} className="text-red-400" /> : <Home size={14} className="text-blue-400" />}
-                             <span className={`font-bold text-xs ${isAttacker ? 'text-red-100' : 'text-blue-100'}`}>{onlineRole}</span>
-                        </div>
-                    )}
-                    
-                    {!onlineRole && (
-                        <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10">
-                            <Home size={14} className="text-amber-400" />
-                            <span className="text-white/90 font-bold text-sm">Wave {uiState.wave}</span>
-                        </div>
-                    )}
+                    {/* Player Badge / Wave Info */}
+                    <div className="flex items-center gap-2">
+                        {initialMode === 'PVP_ONLINE' ? (
+                            <div className="flex items-center gap-2 bg-blue-950/80 border-blue-500/30 px-3 py-1.5 rounded-lg border backdrop-blur-sm">
+                                <Users size={14} className="text-blue-400" />
+                                <span className="text-blue-100 font-bold text-xs">P{onlinePlayerNumber}</span>
+                                <span className="text-blue-300 text-xs">Wave {uiState.wave}</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10">
+                                <Home size={14} className="text-amber-400" />
+                                <span className="text-white/90 font-bold text-sm">Wave {uiState.wave}</span>
+                            </div>
+                        )}
+
+                        {/* Spectator indicator */}
+                        {isSpectating && (
+                            <div className="flex items-center gap-1 bg-purple-950/80 border-purple-500/30 px-2 py-1 rounded-lg border">
+                                <Eye size={12} className="text-purple-400" />
+                                <span className="text-purple-100 text-xs">SPECTATING</span>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="flex items-center gap-2 pointer-events-auto">
-                        {canEvolve && isDefender && (
+                        {canEvolve && (
                             <button onClick={handleEvolve} className="flex items-center gap-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 px-3 py-1.5 rounded-lg border border-yellow-300 shadow-[0_0_12px_rgba(234,179,8,0.5)] animate-pulse active:scale-95 transition-all">
                                 <ArrowUpCircle size={14} className="text-yellow-900" />
                                 <span className="text-yellow-900 font-bold text-xs">EVOLVE</span>
@@ -689,6 +865,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                         )}
                     </div>
                 </div>
+
+                {/* Swipe hint for PVP */}
+                {initialMode === 'PVP_ONLINE' && opponentState && !isSpectating && (
+                    <div className="absolute top-14 right-2 flex items-center gap-1 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-lg pointer-events-none">
+                        <ChevronRight size={12} className="text-white/50" />
+                        <span className="text-white/50 text-xs">Swipe to spectate</span>
+                    </div>
+                )}
+
+                {/* Opponent lives indicator */}
+                {initialMode === 'PVP_ONLINE' && opponentState && !isSpectating && (
+                    <div className="absolute top-14 left-2 flex items-center gap-2 bg-red-950/60 backdrop-blur-sm px-2 py-1 rounded-lg pointer-events-none border border-red-500/20">
+                        <span className="text-red-300 text-xs">Opponent:</span>
+                        <Heart size={12} className="text-red-400 fill-red-400" />
+                        <span className="text-red-100 text-xs font-bold">{opponentState.lives}</span>
+                    </div>
+                )}
 
                 {countdown !== null && initialMode !== 'PVP_ONLINE' && (
                     <div className="absolute top-14 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none">
@@ -704,6 +897,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
             </>
         )}
 
+        {/* WAITING FOR OPPONENT */}
+        {waitingForOpponent && (
+            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 backdrop-blur-sm">
+                <div className="bg-gradient-to-b from-slate-900 to-slate-950 p-8 rounded-2xl border border-blue-500/30 text-center">
+                    <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <h2 className="text-xl font-bold text-blue-100 mb-2">WAITING FOR OPPONENT</h2>
+                    <p className="text-slate-400 text-sm">Game starts when both players are ready</p>
+                </div>
+            </div>
+        )}
+
         {/* START SCREEN */}
         {!hasStartedGame && (
             <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-slate-900/90 to-black/90 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-md">
@@ -711,7 +915,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                     <div className="text-5xl mb-4">🏰</div>
                     <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-300 mb-3 tracking-widest">READY?</h2>
                     <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                        {isAttacker ? "Buy units to destroy the defender." : "Build towers to stop the invader."}
+                        {initialMode === 'PVP_ONLINE'
+                            ? "Build towers to defend against waves. First to lose, loses the match!"
+                            : "Build towers to stop the invaders."
+                        }
                     </p>
                     <button onClick={initializeGame} className="w-full px-6 py-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl font-black flex items-center justify-center gap-3 text-lg tracking-widest shadow-lg shadow-orange-900/50 active:scale-[0.98] transition-all border border-orange-400/30">
                         <Play size={24} /> START GAME
@@ -732,32 +939,38 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
         {/* GAME OVER SCREEN */}
         {uiState.isGameOver && (
-            <div className="absolute inset-0 bg-gradient-to-b from-red-950/95 via-black/95 to-black/95 flex flex-col items-center justify-center z-40 backdrop-blur-sm">
-                <div className="bg-gradient-to-b from-slate-900 to-slate-950 p-8 rounded-2xl border-2 border-red-600/50 text-center shadow-2xl w-[320px]">
-                    <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500 mb-2 tracking-widest">GAME OVER</h2>
-                    <p className="text-slate-400 text-sm mb-4">
-                        {isDefender ? "Your defense fell!" : "The defender survived!"}
-                    </p>
-                    <button onClick={() => initializeGame()} className="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-black flex items-center justify-center gap-3 text-lg tracking-widest shadow-lg active:scale-[0.98] transition-all">
-                        <Play size={24} /> REMATCH
+            <div className={`absolute inset-0 ${gameResult === 'won' ? 'bg-gradient-to-b from-green-950/95 via-black/95 to-black/95' : 'bg-gradient-to-b from-red-950/95 via-black/95 to-black/95'} flex flex-col items-center justify-center z-40 backdrop-blur-sm`}>
+                <div className={`bg-gradient-to-b from-slate-900 to-slate-950 p-8 rounded-2xl border-2 ${gameResult === 'won' ? 'border-green-600/50' : 'border-red-600/50'} text-center shadow-2xl w-[320px]`}>
+                    {gameResult === 'won' ? (
+                        <>
+                            <Trophy size={48} className="text-yellow-400 mx-auto mb-4" />
+                            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400 mb-2 tracking-widest">VICTORY!</h2>
+                            <p className="text-slate-400 text-sm mb-4">Your opponent's defense crumbled!</p>
+                        </>
+                    ) : (
+                        <>
+                            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500 mb-2 tracking-widest">GAME OVER</h2>
+                            <p className="text-slate-400 text-sm mb-4">Your defense fell at wave {uiState.wave}!</p>
+                        </>
+                    )}
+                    <button onClick={() => initializeGame()} className={`w-full px-6 py-4 ${gameResult === 'won' ? 'bg-gradient-to-r from-green-600 to-emerald-600' : 'bg-gradient-to-r from-red-600 to-orange-600'} text-white rounded-xl font-black flex items-center justify-center gap-3 text-lg tracking-widest shadow-lg active:scale-[0.98] transition-all`}>
+                        <Play size={24} /> {initialMode === 'PVP_ONLINE' ? 'PLAY AGAIN' : 'REMATCH'}
                     </button>
                 </div>
             </div>
         )}
       </div>
 
-      {/* 2. MENU BAR (Stats & Building) */}
+      {/* MENU BAR (Stats & Building) */}
       <div className="shrink-0 flex flex-col gap-1.5 w-full min-w-0 pb-2 px-2 relative bg-[#1c1917] z-10">
-        
+
         {/* STATS BAR */}
         <div className="bg-[#292524] px-3 py-2 rounded-lg border border-[#44403c] flex items-center justify-between w-full shadow-lg relative overflow-hidden">
              {/* XP BAR */}
-             {isDefender && (
-                 <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-800">
-                     <div className="h-full transition-all duration-300 ease-out rounded-r-full" style={{ width: `${Math.min(100, (uiState.exp / uiState.maxExp) * 100)}%`, background: uiState.era === 0 ? 'linear-gradient(90deg, #d97706, #fbbf24)' : uiState.era === 1 ? 'linear-gradient(90deg, #64748b, #94a3b8)' : 'linear-gradient(90deg, #dc2626, #f87171)' }} />
-                 </div>
-             )}
-             
+             <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-800">
+                 <div className="h-full transition-all duration-300 ease-out rounded-r-full" style={{ width: `${Math.min(100, (uiState.exp / uiState.maxExp) * 100)}%`, background: uiState.era === 0 ? 'linear-gradient(90deg, #d97706, #fbbf24)' : uiState.era === 1 ? 'linear-gradient(90deg, #64748b, #94a3b8)' : 'linear-gradient(90deg, #dc2626, #f87171)' }} />
+             </div>
+
              <div className="flex items-center gap-4 z-10 relative">
                 <div className="flex items-center gap-1.5 bg-red-950/50 px-2 py-1 rounded">
                     <Heart className="text-red-500 fill-red-500 w-4 h-4" />
@@ -770,40 +983,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
              </div>
         </div>
 
-        {/* CONTROL MENU: TOWERS (DEFENDER) vs UNITS (ATTACKER) */}
+        {/* TOWER BUILDING MENU - Available to all players now */}
         <div className="bg-[#292524] p-1.5 rounded-lg border border-[#44403c] shadow-lg overflow-hidden">
             <div className="flex gap-2 overflow-x-auto items-center scrollbar-hide px-1 pb-1">
-                {isDefender ? (
-                    /* DEFENDER: BUILD TOWERS */
-                    ERA_DATA[uiState.era].availableTowers.map((type) => {
-                        const config = TOWER_TYPES[type];
-                        const isSelected = selectedTowerType === config.type;
-                        const canAfford = uiState.money >= config.cost;
-                        const towerName = ERA_DATA[uiState.era].towerNames[type] || config.baseName;
-                        return (
-                        <button key={config.type} onClick={() => { setSelectedTowerType(isSelected ? null : config.type); triggerHaptic('light'); }}
-                            className={`min-w-[72px] py-2 px-1 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all shrink-0 relative ${isSelected ? 'border-yellow-500 bg-yellow-500/20' : 'border-slate-700 bg-slate-800'} ${!canAfford ? 'opacity-50 grayscale' : ''}`}>
-                            <div className="w-10 h-10 flex items-center justify-center"><TowerIcon type={config.type} era={uiState.era} /></div>
-                            <div className="text-[8px] text-slate-300 font-medium truncate w-full text-center px-1">{towerName}</div>
-                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${canAfford ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>${config.cost}</div>
-                            {isSelected && <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center"><Check size={10} className="text-yellow-900" /></div>}
-                        </button>
-                        );
-                    })
-                ) : (
-                    /* ATTACKER: SPAWN UNITS */
-                    Object.entries(UNIT_TYPES).map(([key, config]) => {
-                        const canAfford = uiState.money >= config.cost;
-                        return (
-                        <button key={key} onClick={() => handleBuyUnit(key)}
-                            className={`min-w-[72px] py-2 px-1 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all shrink-0 active:scale-95 border-red-900/50 bg-red-950/30 ${!canAfford ? 'opacity-50 grayscale' : 'hover:bg-red-900/50 hover:border-red-500/50'}`}>
-                            <div className="w-10 h-10 flex items-center justify-center text-2xl">{config.icon}</div>
-                            <div className="text-[8px] text-red-200 font-medium truncate w-full text-center px-1">{config.name}</div>
-                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${canAfford ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>${config.cost}</div>
-                        </button>
-                        );
-                    })
-                )}
+                {ERA_DATA[uiState.era].availableTowers.map((type) => {
+                    const config = TOWER_TYPES[type];
+                    const isSelected = selectedTowerType === config.type;
+                    const canAfford = uiState.money >= config.cost;
+                    const towerName = ERA_DATA[uiState.era].towerNames[type] || config.baseName;
+                    return (
+                    <button key={config.type} onClick={() => { setSelectedTowerType(isSelected ? null : config.type); triggerHaptic('light'); }}
+                        className={`min-w-[72px] py-2 px-1 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all shrink-0 relative ${isSelected ? 'border-yellow-500 bg-yellow-500/20' : 'border-slate-700 bg-slate-800'} ${!canAfford ? 'opacity-50 grayscale' : ''}`}>
+                        <div className="w-10 h-10 flex items-center justify-center"><TowerIcon type={config.type} era={uiState.era} /></div>
+                        <div className="text-[8px] text-slate-300 font-medium truncate w-full text-center px-1">{towerName}</div>
+                        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${canAfford ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>${config.cost}</div>
+                        {isSelected && <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center"><Check size={10} className="text-yellow-900" /></div>}
+                    </button>
+                    );
+                })}
             </div>
         </div>
       </div>

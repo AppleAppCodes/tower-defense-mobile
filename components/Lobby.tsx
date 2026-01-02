@@ -6,7 +6,7 @@ import { supabase, GameRoom } from '../services/supabaseClient';
 
 interface LobbyProps {
   onBack: () => void;
-  onMatchFound: (role: 'DEFENDER' | 'ATTACKER', gameId: string) => void;
+  onMatchFound: (playerNumber: 1 | 2, gameId: string) => void;
 }
 
 export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
@@ -93,7 +93,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
       if (insertError) throw insertError;
 
       socketService.onMatchFound((data) => {
-        onMatchFound(data.role, data.gameId);
+        onMatchFound(data.playerNumber, data.gameId);
       });
 
       const response = await socketService.joinGame(roomId);
@@ -124,7 +124,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
     setSelectedRoomId(roomId);
 
     socketService.onMatchFound((data) => {
-        onMatchFound(data.role, data.gameId);
+        onMatchFound(data.playerNumber, data.gameId);
     });
 
     try {
