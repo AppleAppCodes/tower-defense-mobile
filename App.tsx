@@ -49,12 +49,6 @@ const App: React.FC = () => {
       setView('GAME');
   };
 
-  const handleStartPvp = () => {
-      if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
-      setGameMode('PVP_LOCAL'); 
-      setView('GAME');
-  };
-
   const handleStartOnline = () => {
       if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
       setView('LOBBY');
@@ -77,7 +71,7 @@ const App: React.FC = () => {
   return (
     <div style={{ height: appHeight }} className="w-full bg-slate-950 flex flex-col overflow-hidden touch-none select-none overscroll-none">
       {view === 'MENU' ? (
-          <MainMenu onStartAdventure={handleStartAdventure} onStartPvp={handleStartPvp} onStartOnline={handleStartOnline} />
+          <MainMenu onStartAdventure={handleStartAdventure} onStartOnline={handleStartOnline} />
       ) : view === 'LOBBY' ? (
           <Lobby onBack={handleBackToMenu} onMatchFound={handleMatchFound} />
       ) : (
