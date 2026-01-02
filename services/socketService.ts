@@ -2,9 +2,8 @@
 import { io, Socket } from 'socket.io-client';
 import { ServerToClientEvents, ClientToServerEvents } from '../types';
 
-// NOTE: In production, replace this with your actual deployed server URL (e.g. Render, Heroku)
-// Connected to Cloudflare Secure Tunnel
-const SERVER_URL = 'https://doll-tar-nats-loading.trycloudflare.com'; 
+// Updated to the provided backend IP address via nip.io
+const SERVER_URL = 'https://157.180.29.14.nip.io'; 
 
 class SocketService {
   public socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
@@ -19,7 +18,7 @@ class SocketService {
     }
 
     this.socket = io(SERVER_URL, {
-      transports: ['polling', 'websocket'], 
+      transports: ['websocket'], // Enforce websocket to avoid polling issues across domains
       autoConnect: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,

@@ -178,7 +178,7 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  join_game: (roomId: string) => void;
+  join_game: (roomId: string, callback?: (response: any) => void) => void;
   send_action: (data: { gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any }) => void;
 }
 
