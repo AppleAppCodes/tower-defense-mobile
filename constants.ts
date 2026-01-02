@@ -5,7 +5,7 @@ import { EnemyType, TowerType, TowerConfig, Vector2D, MapDefinition, GameTheme, 
 export const CANVAS_WIDTH = 400;
 export const CANVAS_HEIGHT = 800;
 export const GRID_SIZE = 50; 
-export const AUTO_START_DELAY = 600; 
+export const AUTO_START_DELAY = 180; // Reduced to 3 seconds (180 frames)
 
 // --- ASSET MAPPING ---
 // Reverted to empty to force procedural rendering
@@ -31,7 +31,7 @@ export const ERA_DATA = [
       [TowerType.BASIC]: "Slinger",
       [TowerType.RAPID]: "Hunter", 
       [TowerType.SNIPER]: "Spearman",
-      [TowerType.AOE]: "Rock Trap",
+      [TowerType.AOE]: "Rock Thrower",
       [TowerType.LASER]: "Shaman", 
       [TowerType.FROST]: "Ice Spirit",
       [TowerType.SHOCK]: "Storm Totem",
