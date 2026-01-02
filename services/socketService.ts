@@ -4,7 +4,7 @@ import { ServerToClientEvents, ClientToServerEvents } from '../types';
 
 // NOTE: In production, replace this with your actual deployed server URL (e.g. Render, Heroku)
 // Connected to Cloudflare Secure Tunnel
-const SERVER_URL = 'https://doll-tar-nats-loading.trycloudflare.com';
+const SERVER_URL = 'http://157.180.29.14:3000';
 class SocketService {
   public socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   public isConnected: boolean = false;
