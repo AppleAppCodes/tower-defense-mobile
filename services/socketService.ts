@@ -11,7 +11,6 @@ class SocketService {
   public isConnected: boolean = false;
 
   connect() {
-    // If socket exists but disconnected, try to reconnect
     if (this.socket) {
         if (!this.socket.connected) {
             this.socket.connect();
@@ -20,7 +19,6 @@ class SocketService {
     }
 
     this.socket = io(SERVER_URL, {
-      // Allow default transports (polling first, then upgrade) for better compatibility with Cloudflare/Telegram
       transports: ['polling', 'websocket'], 
       autoConnect: true,
       reconnectionAttempts: 5,
@@ -43,10 +41,25 @@ class SocketService {
     });
   }
 
-  joinGame(roomId: string) {
-    if (!this.socket) this.connect();
-    console.log('Emitting join_game for room:', roomId);
-    this.socket?.emit('join_game', roomId);
+  // Updated to return a Promise for UI feedback
+  joinGame(roomId: string): Promise<{status: string, role?: string, message?: string}> {
+    return new Promise((resolve) => {
+        if (!this.socket) this.connect();
+
+        // 5 second timeout safety
+        const timeout = setTimeout(() => {
+            resolve({ status: 'error', message: 'Connection timed out' });
+        }, 5000);
+
+        console.log('Emitting join_game for room:', roomId);
+        
+        // Emit with Acknowledgement callback
+        this.socket?.emit('join_game', roomId, (response: any) => {
+            clearTimeout(timeout);
+            console.log('Server acknowledged join:', response);
+            resolve(response);
+        });
+    });
   }
 
   sendAction(gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any) {
@@ -54,7 +67,6 @@ class SocketService {
   }
 
   onMatchFound(callback: (data: { role: 'DEFENDER' | 'ATTACKER', gameId: string }) => void) {
-    // Remove existing listeners to prevent duplicates
     this.socket?.off('match_found');
     this.socket?.on('match_found', (data) => {
         console.log('Match found event received:', data);

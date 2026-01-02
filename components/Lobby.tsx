@@ -10,7 +10,8 @@ interface LobbyProps {
 
 export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
   const [roomId, setRoomId] = useState('');
-  const [status, setStatus] = useState<'IDLE' | 'CONNECTING' | 'WAITING'>('IDLE');
+  const [status, setStatus] = useState<'IDLE' | 'CONNECTING' | 'WAITING' | 'ERROR'>('IDLE');
+  const [errorMessage, setErrorMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
 
   // Connect on mount
@@ -24,33 +25,48 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
 
     return () => {
         clearInterval(checkConnection);
-        // Note: We don't disconnect here to keep connection alive if match found
     };
   }, []);
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!roomId) return;
     if (!isConnected) {
-        alert("Connecting to server... please wait.");
+        setErrorMessage("Not connected to server yet.");
+        setStatus('ERROR');
         return;
     }
 
     setStatus('CONNECTING');
+    setErrorMessage('');
     
-    // Listen for match start
+    // Set up event listener *before* joining
     socketService.onMatchFound((data) => {
         console.log("Lobby received match_found:", data);
         onMatchFound(data.role, data.gameId);
     });
 
-    // Join the specific room
-    socketService.joinGame(roomId);
-    setStatus('WAITING');
+    // Send Join Request and Wait for Acknowledgement
+    try {
+        const response = await socketService.joinGame(roomId);
+        
+        if (response.status === 'ok') {
+            setStatus('WAITING');
+            // Note: If role is DEFENDER, the onMatchFound event usually fires immediately after this
+        } else {
+            setErrorMessage(response.message || "Failed to join room.");
+            setStatus('ERROR');
+        }
+    } catch (e) {
+        setErrorMessage("Network error.");
+        setStatus('ERROR');
+    }
   };
 
   const handleCreateRandom = () => {
       const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
       setRoomId(randomId);
+      setStatus('IDLE');
+      setErrorMessage('');
   };
 
   return (
@@ -69,7 +85,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                 <p className="text-slate-400 text-sm mt-2">Enter a Room Code to play with a friend.</p>
             </div>
 
-            {status === 'IDLE' && (
+            {(status === 'IDLE' || status === 'ERROR') && (
                 <div className="flex flex-col gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
                     {/* Connection Status Indicator */}
                     <div className={`text-[10px] text-center font-mono flex items-center justify-center gap-2 p-2 rounded ${isConnected ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
@@ -83,7 +99,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                             <input 
                                 type="text" 
                                 value={roomId}
-                                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                                onChange={(e) => { setRoomId(e.target.value.toUpperCase()); setStatus('IDLE'); }}
                                 placeholder="ENTER CODE"
                                 className="flex-1 bg-black/50 border border-slate-700 rounded-lg px-4 py-3 text-center font-mono text-xl tracking-widest focus:border-indigo-500 outline-none transition-colors"
                             />
@@ -100,6 +116,12 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                     >
                         <Users size={20} /> JOIN ROOM
                     </button>
+
+                    {status === 'ERROR' && (
+                        <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-xs text-center font-bold">
+                            {errorMessage}
+                        </div>
+                    )}
                     
                     <div className="text-[10px] text-center text-slate-500 mt-2 font-mono">
                          Server: Cloudflare Secure
@@ -107,10 +129,12 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                 </div>
             )}
 
-            {status === 'WAITING' && (
+            {(status === 'CONNECTING' || status === 'WAITING') && (
                 <div className="text-center p-8 bg-slate-900/50 rounded-2xl border border-indigo-500/30">
                     <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <h3 className="text-xl font-bold text-indigo-400">WAITING FOR OPPONENT...</h3>
+                    <h3 className="text-xl font-bold text-indigo-400">
+                        {status === 'CONNECTING' ? 'JOINING ROOM...' : 'WAITING FOR OPPONENT...'}
+                    </h3>
                     <p className="text-slate-400 text-sm mt-2 font-mono">ROOM: {roomId}</p>
                     <p className="text-xs text-slate-500 mt-4">Waiting for server response...</p>
                     <button onClick={() => setStatus('IDLE')} className="mt-6 text-xs text-red-400 hover:underline">Cancel</button>
