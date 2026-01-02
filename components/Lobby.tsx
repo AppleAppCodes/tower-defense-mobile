@@ -78,7 +78,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                     
                     <div className="text-[10px] text-center text-green-400 mt-2 font-mono flex items-center justify-center gap-1">
                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                         Server: Cloudflare Secure (Live)
+                         Server: Hetzner Server (Live)
                     </div>
                 </div>
             )}
