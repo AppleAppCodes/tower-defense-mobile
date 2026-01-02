@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Play, Copy, Users, ArrowLeft, Globe, Wifi } from 'lucide-react';
+import { Play, Copy, Users, ArrowLeft, Globe, Wifi, AlertTriangle } from 'lucide-react';
 import { socketService } from '../services/socketService';
 
 interface LobbyProps {
@@ -13,6 +13,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
   const [status, setStatus] = useState<'IDLE' | 'CONNECTING' | 'WAITING' | 'ERROR'>('IDLE');
   const [errorMessage, setErrorMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
+  const [socketError, setSocketError] = useState('');
 
   // Connect on mount
   useEffect(() => {
@@ -21,6 +22,11 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
     const checkConnection = setInterval(() => {
         const connected = socketService.socket?.connected || false;
         setIsConnected(connected);
+        if (!connected && socketService.lastError) {
+            setSocketError(socketService.lastError);
+        } else {
+            setSocketError('');
+        }
     }, 500);
 
     return () => {
@@ -88,9 +94,16 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
             {(status === 'IDLE' || status === 'ERROR') && (
                 <div className="flex flex-col gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
                     {/* Connection Status Indicator */}
-                    <div className={`text-[10px] text-center font-mono flex items-center justify-center gap-2 p-2 rounded ${isConnected ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                         <Wifi size={12} className={isConnected ? "" : "animate-pulse"} />
-                         {isConnected ? "SERVER ONLINE" : "CONNECTING TO SERVER..."}
+                    <div className={`text-[10px] text-center font-mono flex flex-col items-center justify-center gap-1 p-2 rounded ${isConnected ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                         <div className="flex items-center gap-2">
+                            <Wifi size={12} className={isConnected ? "" : "animate-pulse"} />
+                            {isConnected ? "SERVER ONLINE" : "CONNECTING TO SERVER..."}
+                         </div>
+                         {!isConnected && socketError && (
+                             <div className="text-[9px] text-red-400 flex items-center gap-1 mt-1">
+                                 <AlertTriangle size={8} /> {socketError}
+                             </div>
+                         )}
                     </div>
 
                     <div className="space-y-2">
@@ -124,7 +137,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                     )}
                     
                     <div className="text-[10px] text-center text-slate-500 mt-2 font-mono">
-                         Server: Cloudflare Secure
+                         Server: {isConnected ? 'Online' : 'Reconnecting...'}
                     </div>
                 </div>
             )}

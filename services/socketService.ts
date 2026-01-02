@@ -8,6 +8,7 @@ const SERVER_URL = 'https://157.180.29.14.nip.io';
 class SocketService {
   public socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   public isConnected: boolean = false;
+  public lastError: string = '';
 
   connect() {
     if (this.socket) {
@@ -17,16 +18,19 @@ class SocketService {
         return;
     }
 
+    // FORCE WEBSOCKET ONLY - No Polling
     this.socket = io(SERVER_URL, {
-      transports: ['websocket'], // Enforce websocket to avoid polling issues across domains
-      autoConnect: true,
+      transports: ['websocket'], 
+      upgrade: false, 
+      reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionDelay: 1000
     });
 
     this.socket.on('connect', () => {
       console.log('Connected to Game Server:', this.socket?.id);
       this.isConnected = true;
+      this.lastError = '';
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -37,6 +41,7 @@ class SocketService {
     this.socket.on('connect_error', (err) => {
         console.warn("Socket connection failed:", err.message);
         this.isConnected = false;
+        this.lastError = err.message;
     });
   }
 
