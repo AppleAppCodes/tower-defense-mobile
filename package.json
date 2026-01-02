@@ -1,4 +1,3 @@
-
 {
   "name": "tower-defense-game",
   "private": true,
@@ -14,6 +13,7 @@
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "socket.io": "^4.8.0",
     "socket.io-client": "^4.8.0"
   },
   "devDependencies": {

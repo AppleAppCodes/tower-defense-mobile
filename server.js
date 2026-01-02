@@ -1,4 +1,3 @@
-
 import { createServer } from "http";
 import { Server } from "socket.io";
 
@@ -15,10 +14,10 @@ const httpServer = createServer((req, res) => {
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Allow connections from anywhere
+    origin: "*",
     methods: ["GET", "POST"]
   },
-  transports: ['polling', 'websocket'] // Allow both for robustness
+  transports: ['polling', 'websocket']
 });
 
 // Store active rooms: { roomId: { defender: socketId, attacker: socketId } }
