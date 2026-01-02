@@ -4,7 +4,7 @@ import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Ma
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, THEMES, ERA_DATA, UNIT_TYPES } from '../constants';
 import { audioService } from '../services/audioService';
 import { socketService } from '../services/socketService';
-import { Heart, Coins, Play, Check, ArrowUpCircle, Sword, Wifi, PlayCircle, Clock } from 'lucide-react';
+import { Heart, Coins, Play, Check, ArrowUpCircle, Sword, Wifi, PlayCircle, Clock, Home, Zap, FastForward } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -532,23 +532,31 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     if (state.era < 2 && state.exp >= state.maxExp) {
         state.exp -= state.maxExp;
         state.era++;
-        
+
         if (ERA_DATA[state.era]) {
             state.maxExp = ERA_DATA[state.era].maxExp;
         }
-        
+
         triggerHaptic('success');
-        audioService.playBuild(); 
-        
+        audioService.playBuild();
+
         setNotification({
             title: `${ERA_DATA[state.era].name}`,
             subtitle: "NEW TECHNOLOGY UNLOCKED",
             color: "text-yellow-400"
         });
         setTimeout(() => setNotification(null), 3000);
-        
+
         setUiState({ ...state });
     }
+  }, []);
+
+  // Speed Toggle (Solo Mode Only)
+  const handleToggleSpeed = useCallback(() => {
+    const state = gameStateRef.current;
+    state.gameSpeed = state.gameSpeed === 1 ? 2 : 1;
+    triggerHaptic('light');
+    setUiState({ ...state });
   }, []);
 
   // --- RAF LOOP ---
@@ -581,38 +589,71 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
             className="block w-full h-full" style={{ touchAction: 'none' }}
         />
         
-        {/* TOP HUD: WAVE + COUNTDOWN */}
+        {/* TOP HUD */}
         {hasStartedGame && !uiState.isGameOver && (
-            <div className="absolute top-3 w-full flex flex-col items-center pointer-events-none gap-2 px-4">
-                <div className="bg-gradient-to-r from-slate-900/90 via-slate-800/90 to-slate-900/90 backdrop-blur-md px-5 py-2 rounded-xl border border-slate-600/50 shadow-2xl flex items-center gap-4">
-                     <div className="flex items-center gap-2">
-                         <Sword size={16} className="text-red-400" />
-                         <span className="text-white font-black text-lg tracking-wider">WAVE {uiState.wave}</span>
-                     </div>
-                     {countdown !== null && (
-                         <div className="flex items-center gap-2 bg-yellow-500/20 px-3 py-1 rounded-lg border border-yellow-500/30">
-                             <Clock size={14} className="text-yellow-400" />
-                             <span className="text-yellow-300 font-bold text-sm">{countdown}s</span>
-                         </div>
-                     )}
-                     {uiState.isPlaying && enemiesRef.current.length > 0 && (
-                         <div className="flex items-center gap-2 bg-red-500/20 px-3 py-1 rounded-lg border border-red-500/30">
-                             <span className="text-red-300 font-bold text-sm">{enemiesRef.current.length} enemies</span>
-                         </div>
-                     )}
+            <>
+                {/* Top Bar - Wave left, Controls right */}
+                <div className="absolute top-2 left-2 right-2 flex items-start justify-between pointer-events-none z-10">
+                    {/* Left: Wave Info */}
+                    <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10">
+                        <Home size={14} className="text-amber-400" />
+                        <span className="text-white/90 font-bold text-sm">Wave {uiState.wave}</span>
+                        {uiState.isPlaying && enemiesRef.current.length > 0 && (
+                            <span className="text-red-400 text-xs">({enemiesRef.current.length})</span>
+                        )}
+                    </div>
+
+                    {/* Right: Controls */}
+                    <div className="flex items-center gap-2 pointer-events-auto">
+                        {/* Evolution Button - Small */}
+                        {canEvolve && (
+                            <button
+                                onClick={handleEvolve}
+                                className="flex items-center gap-1.5 bg-gradient-to-r from-yellow-500 to-amber-500
+                                           px-3 py-1.5 rounded-lg border border-yellow-300
+                                           shadow-[0_0_12px_rgba(234,179,8,0.5)] animate-pulse
+                                           active:scale-95 transition-all"
+                            >
+                                <ArrowUpCircle size={14} className="text-yellow-900" />
+                                <span className="text-yellow-900 font-bold text-xs">EVOLVE</span>
+                            </button>
+                        )}
+
+                        {/* Speed Toggle - Solo Mode Only */}
+                        {initialMode === 'DEFENSE' && (
+                            <button
+                                onClick={handleToggleSpeed}
+                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border transition-all active:scale-95
+                                    ${uiState.gameSpeed === 2
+                                        ? 'bg-green-500/90 border-green-300 text-green-900'
+                                        : 'bg-black/60 backdrop-blur-sm border-white/10 text-white/70 hover:bg-white/10'
+                                    }`}
+                            >
+                                <FastForward size={14} />
+                                <span className="font-bold text-xs">x{uiState.gameSpeed}</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
-                {/* BUILD PHASE SKIP BUTTON */}
+
+                {/* Center: Countdown + Start Button */}
                 {countdown !== null && (
-                    <button
-                        onClick={handleStartWave}
-                        className="pointer-events-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500
-                                   text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2
-                                   shadow-lg shadow-green-900/50 active:scale-95 transition-all border border-green-400/30"
-                    >
-                        <PlayCircle size={16} /> START WAVE NOW
-                    </button>
+                    <div className="absolute top-14 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none">
+                        <div className="flex items-center gap-2 bg-yellow-500/20 backdrop-blur-sm px-4 py-1.5 rounded-full border border-yellow-500/30">
+                            <Clock size={14} className="text-yellow-400" />
+                            <span className="text-yellow-300 font-bold text-sm">Starts in {countdown}s</span>
+                        </div>
+                        <button
+                            onClick={handleStartWave}
+                            className="pointer-events-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500
+                                       text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2
+                                       shadow-lg shadow-green-900/50 active:scale-95 transition-all border border-green-400/30"
+                        >
+                            <PlayCircle size={14} /> START NOW
+                        </button>
+                    </div>
                 )}
-            </div>
+            </>
         )}
 
         {/* START SCREEN */}
@@ -702,25 +743,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
       {/* 2. MENU BAR (Stats & Building) */}
       <div className="shrink-0 flex flex-col gap-1.5 w-full min-w-0 pb-2 px-2 relative bg-[#1c1917] z-10">
-
-        {/* EVOLUTION BANNER - Full width when available */}
-        {canEvolve && (
-            <button
-                onClick={handleEvolve}
-                className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600
-                           border-2 border-yellow-400 shadow-[0_0_20px_rgba(234,179,8,0.5)]
-                           flex items-center justify-center gap-3 animate-pulse
-                           hover:from-yellow-500 hover:via-amber-400 hover:to-yellow-500
-                           active:scale-[0.98] transition-all"
-            >
-                <ArrowUpCircle size={24} className="text-yellow-900" />
-                <div className="flex flex-col items-start">
-                    <span className="text-yellow-900 font-black text-sm tracking-wider">ADVANCE TO {ERA_DATA[uiState.era + 1]?.name || 'MAX'}</span>
-                    <span className="text-yellow-800 text-[10px] font-medium">Tap to unlock new technologies!</span>
-                </div>
-                <ArrowUpCircle size={24} className="text-yellow-900" />
-            </button>
-        )}
 
         {/* STATS BAR */}
         <div className="bg-[#292524] px-3 py-2 rounded-lg border border-[#44403c] flex items-center justify-between w-full shadow-lg relative overflow-hidden">
