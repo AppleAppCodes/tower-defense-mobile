@@ -263,5 +263,10 @@ export const INITIAL_STATE = {
   wave: 1,
   era: 0,
   exp: 0,
-  maxExp: ERA_DATA[0].maxExp
+  maxExp: ERA_DATA[0].maxExp,
+  gameSpeed: 1,
+  isPlaying: false,
+  isGameOver: false,
+  gameTime: 0,
+  autoStartTimer: 600 // BUILD_PHASE_DURATION
 };

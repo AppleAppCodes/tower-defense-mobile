@@ -142,17 +142,41 @@ const drawProjectile = (ctx: CanvasRenderingContext2D, proj: Projectile, era: nu
 };
 
 const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
-    let icon = "T";
-    if (era === 0) {
-        if (type === TowerType.BASIC) icon = "🪃"; else if (type === TowerType.RAPID) icon = "🏹"; 
-        else if (type === TowerType.SNIPER) icon = "🔱"; else if (type === TowerType.AOE) icon = "🪨"; 
-    } else if (era === 1) {
-        if (type === TowerType.BASIC) icon = "🏰"; else if (type === TowerType.RAPID) icon = "🤺"; 
-        else if (type === TowerType.SNIPER) icon = "🎯"; 
-    } else {
-        if (type === TowerType.BASIC) icon = "🔫"; else if (type === TowerType.RAPID) icon = "⚙️"; else if (type === TowerType.MISSILE) icon = "🚀"; 
-    }
-    return <div className="w-full h-full bg-slate-700/50 rounded-full flex items-center justify-center text-lg shadow-inner">{icon}</div>;
+    const iconMap: Record<number, Partial<Record<TowerType, string>>> = {
+        0: { // Stone Age
+            [TowerType.BASIC]: "🪃",
+            [TowerType.RAPID]: "🏹",
+            [TowerType.SNIPER]: "🔱",
+            [TowerType.AOE]: "🪨",
+        },
+        1: { // Castle Age
+            [TowerType.BASIC]: "🏰",
+            [TowerType.RAPID]: "🤺",
+            [TowerType.SNIPER]: "🎯",
+            [TowerType.AOE]: "💣",
+            [TowerType.LASER]: "🔮",
+            [TowerType.FROST]: "❄️",
+        },
+        2: { // Imperial Age
+            [TowerType.BASIC]: "🔫",
+            [TowerType.RAPID]: "⚙️",
+            [TowerType.SNIPER]: "🎯",
+            [TowerType.AOE]: "💥",
+            [TowerType.LASER]: "⚡",
+            [TowerType.FROST]: "🧊",
+            [TowerType.SHOCK]: "⚡",
+            [TowerType.MISSILE]: "🚀",
+        }
+    };
+
+    const icon = iconMap[era]?.[type] || "🗼";
+    const bgColors = ['bg-amber-900/60', 'bg-slate-600/60', 'bg-slate-800/60'];
+
+    return (
+        <div className={`w-full h-full ${bgColors[era]} rounded-lg flex items-center justify-center text-2xl shadow-inner border border-white/10`}>
+            {icon}
+        </div>
+    );
 };
 
 // --- GAME COMPONENT ---
@@ -179,9 +203,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     era: 0,
     exp: 0,
     maxExp: ERA_DATA[0].maxExp,
-    autoStartTimer: BUILD_PHASE_DURATION, 
+    autoStartTimer: BUILD_PHASE_DURATION,
     isPlaying: false,
-    isGameOver: false
+    isGameOver: false,
+    gameSpeed: 1 // CRITICAL: Game loop multiplier
   });
   
   // Entities Refs
@@ -236,7 +261,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
           maxExp: ERA_DATA[0].maxExp,
           autoStartTimer: BUILD_PHASE_DURATION, // 10s Build Phase
           isPlaying: false, // Wait for timer
-          isGameOver: false
+          isGameOver: false,
+          gameSpeed: 1 // Game loop multiplier
       };
       
       towersRef.current = [];
@@ -557,20 +583,33 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         
         {/* TOP HUD: WAVE + COUNTDOWN */}
         {hasStartedGame && !uiState.isGameOver && (
-            <div className="absolute top-2 w-full flex flex-col items-center pointer-events-none gap-2">
-                <div className="bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-700 text-xs font-bold text-white shadow-lg flex items-center gap-3">
-                     <span className="text-slate-400">WAVE {uiState.wave}</span>
+            <div className="absolute top-3 w-full flex flex-col items-center pointer-events-none gap-2 px-4">
+                <div className="bg-gradient-to-r from-slate-900/90 via-slate-800/90 to-slate-900/90 backdrop-blur-md px-5 py-2 rounded-xl border border-slate-600/50 shadow-2xl flex items-center gap-4">
+                     <div className="flex items-center gap-2">
+                         <Sword size={16} className="text-red-400" />
+                         <span className="text-white font-black text-lg tracking-wider">WAVE {uiState.wave}</span>
+                     </div>
                      {countdown !== null && (
-                         <div className="flex items-center gap-1 text-yellow-400 animate-pulse">
-                             <Clock size={12} />
-                             <span>STARTS IN {countdown}s</span>
+                         <div className="flex items-center gap-2 bg-yellow-500/20 px-3 py-1 rounded-lg border border-yellow-500/30">
+                             <Clock size={14} className="text-yellow-400" />
+                             <span className="text-yellow-300 font-bold text-sm">{countdown}s</span>
+                         </div>
+                     )}
+                     {uiState.isPlaying && enemiesRef.current.length > 0 && (
+                         <div className="flex items-center gap-2 bg-red-500/20 px-3 py-1 rounded-lg border border-red-500/30">
+                             <span className="text-red-300 font-bold text-sm">{enemiesRef.current.length} enemies</span>
                          </div>
                      )}
                 </div>
                 {/* BUILD PHASE SKIP BUTTON */}
                 {countdown !== null && (
-                    <button onClick={handleStartWave} className="pointer-events-auto bg-green-600/90 text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-lg active:scale-95 transition-all">
-                        <PlayCircle size={12} /> START WAVE NOW
+                    <button
+                        onClick={handleStartWave}
+                        className="pointer-events-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500
+                                   text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2
+                                   shadow-lg shadow-green-900/50 active:scale-95 transition-all border border-green-400/30"
+                    >
+                        <PlayCircle size={16} /> START WAVE NOW
                     </button>
                 )}
             </div>
@@ -578,12 +617,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
         {/* START SCREEN */}
         {!hasStartedGame && (
-            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-md">
-                <div className="bg-[#292524] p-8 rounded-2xl border border-[#78350f] text-center shadow-2xl w-[300px]">
-                    <h2 className="text-2xl font-display text-[#fcd34d] mb-2 tracking-widest">READY?</h2>
-                    <p className="text-slate-400 text-xs mb-6">Build defenses before the horde arrives.</p>
-                    <button onClick={initializeGame} className="w-full px-6 py-4 bg-[#ea580c] hover:bg-[#c2410c] text-white rounded-lg font-bold flex items-center justify-center gap-2 mx-auto text-sm tracking-widest shadow-lg active:scale-95 transition-transform">
-                        <Play size={20} /> START
+            <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-slate-900/90 to-black/90 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-md">
+                <div className="bg-gradient-to-b from-[#292524] to-[#1c1917] p-8 rounded-2xl border-2 border-amber-600/50 text-center shadow-2xl w-[320px]">
+                    <div className="text-5xl mb-4">🏰</div>
+                    <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-300 mb-3 tracking-widest">
+                        READY?
+                    </h2>
+                    <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                        Build your defenses before the enemy horde arrives!
+                    </p>
+                    <button
+                        onClick={initializeGame}
+                        className="w-full px-6 py-4 bg-gradient-to-r from-orange-600 to-amber-600
+                                   hover:from-orange-500 hover:to-amber-500
+                                   text-white rounded-xl font-black flex items-center justify-center gap-3
+                                   text-lg tracking-widest shadow-lg shadow-orange-900/50
+                                   active:scale-[0.98] transition-all border border-orange-400/30"
+                    >
+                        <Play size={24} /> START GAME
                     </button>
                 </div>
             </div>
@@ -591,68 +642,168 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
         {/* NOTIFICATION */}
         {notification && (
-            <div className={`absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none flex flex-col items-center justify-center animate-in fade-in zoom-in-90 duration-300`}>
-                 <h2 className={`font-display text-4xl font-black ${notification.color} drop-shadow-md tracking-widest text-center stroke-black`}>
-                     {notification.title}
-                 </h2>
-                 {notification.subtitle && <div className="bg-black/60 text-white px-3 py-1 rounded text-xs font-mono mt-2">{notification.subtitle}</div>}
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none flex flex-col items-center justify-center">
+                <div className="bg-black/80 backdrop-blur-md px-8 py-6 rounded-2xl border border-white/20 shadow-2xl">
+                    <h2 className={`font-black text-4xl ${notification.color} drop-shadow-lg tracking-widest text-center`}>
+                        {notification.title}
+                    </h2>
+                    {notification.subtitle && (
+                        <div className="text-white/80 text-sm font-medium mt-3 text-center tracking-wide">
+                            {notification.subtitle}
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* GAME OVER SCREEN */}
+        {uiState.isGameOver && (
+            <div className="absolute inset-0 bg-gradient-to-b from-red-950/95 via-black/95 to-black/95 flex flex-col items-center justify-center z-40 backdrop-blur-sm">
+                <div className="bg-gradient-to-b from-slate-900 to-slate-950 p-8 rounded-2xl border-2 border-red-600/50 text-center shadow-2xl w-[320px]">
+                    <div className="text-6xl mb-4">💀</div>
+                    <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500 mb-2 tracking-widest">
+                        GAME OVER
+                    </h2>
+                    <p className="text-slate-400 text-sm mb-4">Your defenses have fallen!</p>
+
+                    <div className="bg-black/50 rounded-xl p-4 mb-6 border border-slate-700">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-slate-400 text-sm">Waves Survived</span>
+                            <span className="text-2xl font-black text-white">{uiState.wave - 1}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-slate-400 text-sm">Final Era</span>
+                            <span className="text-lg font-bold" style={{ color: ERA_DATA[uiState.era].color }}>
+                                {ERA_DATA[uiState.era].name}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-sm">Towers Built</span>
+                            <span className="text-lg font-bold text-yellow-400">{towersRef.current.length}</span>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => {
+                            initializeGame();
+                        }}
+                        className="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-orange-600
+                                   hover:from-red-500 hover:to-orange-500
+                                   text-white rounded-xl font-black flex items-center justify-center gap-3
+                                   text-lg tracking-widest shadow-lg shadow-red-900/50
+                                   active:scale-[0.98] transition-all border border-red-400/30"
+                    >
+                        <Play size={24} /> TRY AGAIN
+                    </button>
+                </div>
             </div>
         )}
       </div>
 
       {/* 2. MENU BAR (Stats & Building) */}
-      <div className="shrink-0 flex flex-col gap-1 w-full min-w-0 pb-1 px-2 relative bg-[#1c1917] z-10">
-        
-        {/* STATS + EXP BAR */}
-        <div className="bg-[#292524] px-3 py-2 rounded-lg border border-[#44403c] flex items-center justify-between w-full shadow-lg h-12 relative overflow-hidden">
-             
-             {/* XP BAR BACKGROUND (Fix: Properly positioned under text) */}
-             <div className="absolute inset-0 bg-slate-800/50 z-0">
-                 <div className="h-full transition-all duration-500 ease-out" 
-                      style={{ width: `${Math.min(100, (uiState.exp / uiState.maxExp) * 100)}%`, backgroundColor: uiState.era === 2 ? '#3b82f6' : '#22c55e', opacity: 0.2 }} />
+      <div className="shrink-0 flex flex-col gap-1.5 w-full min-w-0 pb-2 px-2 relative bg-[#1c1917] z-10">
+
+        {/* EVOLUTION BANNER - Full width when available */}
+        {canEvolve && (
+            <button
+                onClick={handleEvolve}
+                className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600
+                           border-2 border-yellow-400 shadow-[0_0_20px_rgba(234,179,8,0.5)]
+                           flex items-center justify-center gap-3 animate-pulse
+                           hover:from-yellow-500 hover:via-amber-400 hover:to-yellow-500
+                           active:scale-[0.98] transition-all"
+            >
+                <ArrowUpCircle size={24} className="text-yellow-900" />
+                <div className="flex flex-col items-start">
+                    <span className="text-yellow-900 font-black text-sm tracking-wider">ADVANCE TO {ERA_DATA[uiState.era + 1]?.name || 'MAX'}</span>
+                    <span className="text-yellow-800 text-[10px] font-medium">Tap to unlock new technologies!</span>
+                </div>
+                <ArrowUpCircle size={24} className="text-yellow-900" />
+            </button>
+        )}
+
+        {/* STATS BAR */}
+        <div className="bg-[#292524] px-3 py-2 rounded-lg border border-[#44403c] flex items-center justify-between w-full shadow-lg relative overflow-hidden">
+
+             {/* XP BAR - More visible */}
+             <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-800">
+                 <div
+                     className="h-full transition-all duration-300 ease-out rounded-r-full"
+                     style={{
+                         width: `${Math.min(100, (uiState.exp / uiState.maxExp) * 100)}%`,
+                         background: uiState.era === 0 ? 'linear-gradient(90deg, #d97706, #fbbf24)' :
+                                     uiState.era === 1 ? 'linear-gradient(90deg, #64748b, #94a3b8)' :
+                                     'linear-gradient(90deg, #dc2626, #f87171)',
+                         boxShadow: '0 0 8px currentColor'
+                     }}
+                 />
              </div>
 
+             {/* Left: Lives & Money */}
              <div className="flex items-center gap-4 z-10 relative">
-                <div className="flex items-center gap-1.5">
-                    <Heart className="text-red-500 fill-red-500/20 w-4 h-4" />
+                <div className="flex items-center gap-1.5 bg-red-950/50 px-2 py-1 rounded">
+                    <Heart className="text-red-500 fill-red-500 w-4 h-4" />
                     <span className="text-base font-bold text-red-100">{uiState.lives}</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    <Coins className="text-yellow-400 fill-yellow-400/20 w-4 h-4" />
-                    <span className="text-base font-bold text-yellow-100">{uiState.money}</span>
+                <div className="flex items-center gap-1.5 bg-yellow-950/50 px-2 py-1 rounded">
+                    <Coins className="text-yellow-400 fill-yellow-400 w-4 h-4" />
+                    <span className="text-base font-bold text-yellow-100">${uiState.money}</span>
                 </div>
              </div>
 
+             {/* Right: Era Info & XP */}
              <div className="z-10 relative flex items-center gap-2">
-                 {canEvolve ? (
-                     <button onClick={handleEvolve} className="flex items-center gap-1 px-3 py-1 bg-yellow-500 hover:bg-yellow-400 text-black text-[10px] font-bold rounded animate-pulse shadow-[0_0_15px_rgba(234,179,8,0.6)]">
-                         <ArrowUpCircle size={14} /> EVOLVE AGE
-                     </button>
-                 ) : (
-                     <div className="text-[10px] font-mono text-slate-400 flex flex-col items-end leading-tight">
-                         <span className="opacity-50 tracking-wider uppercase">{ERA_DATA[uiState.era].name}</span>
-                         <span className="text-[9px] text-slate-500">{uiState.exp} / {uiState.maxExp} XP</span>
+                 <div className="flex flex-col items-end leading-tight">
+                     <span
+                         className="text-[11px] font-bold tracking-wider uppercase"
+                         style={{ color: ERA_DATA[uiState.era].color }}
+                     >
+                         {ERA_DATA[uiState.era].name}
+                     </span>
+                     <div className="flex items-center gap-1">
+                         <span className="text-[10px] text-slate-400 font-mono">
+                             {uiState.exp}/{uiState.maxExp}
+                         </span>
+                         <span className="text-[9px] text-slate-500">XP</span>
                      </div>
-                 )}
+                 </div>
              </div>
         </div>
 
         {/* BUILDER MENU */}
-        <div className="bg-[#292524] p-1 rounded-lg border border-[#44403c] flex gap-2 w-full shadow-lg h-20 items-center overflow-hidden">
-            <div className="flex gap-1 overflow-x-auto h-full items-center scrollbar-hide px-1 w-full">
+        <div className="bg-[#292524] p-1.5 rounded-lg border border-[#44403c] shadow-lg overflow-hidden">
+            <div className="flex gap-2 overflow-x-auto items-center scrollbar-hide px-1 pb-1">
                 {ERA_DATA[uiState.era].availableTowers.map((type) => {
                     const config = TOWER_TYPES[type];
                     const isSelected = selectedTowerType === config.type;
                     const canAfford = uiState.money >= config.cost;
-                    
+                    const towerName = ERA_DATA[uiState.era].towerNames[type] || config.baseName;
+
                     return (
-                    <button key={config.type} onClick={() => { setSelectedTowerType(isSelected ? null : config.type); triggerHaptic('light'); }}
-                        className={`min-w-[68px] h-[90%] rounded-md border flex flex-col items-center justify-center gap-0.5 transition-all shrink-0 relative 
-                        ${isSelected ? 'border-yellow-500 bg-yellow-500/20 scale-95' : 'border-white/5 bg-black/20 hover:bg-black/40'}
-                        ${!canAfford ? 'opacity-40 grayscale' : ''}
-                        `}>
-                        <div className="w-8 h-8"><TowerIcon type={config.type} era={uiState.era} /></div>
-                        <div className={`text-[9px] font-mono font-bold ${canAfford ? 'text-[#fbbf24]' : 'text-red-400'}`}>${config.cost}</div>
+                    <button
+                        key={config.type}
+                        onClick={() => { setSelectedTowerType(isSelected ? null : config.type); triggerHaptic('light'); }}
+                        className={`min-w-[72px] py-2 px-1 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all shrink-0 relative
+                        ${isSelected
+                            ? 'border-yellow-500 bg-gradient-to-b from-yellow-500/30 to-yellow-600/10 scale-[0.97] shadow-[0_0_12px_rgba(234,179,8,0.4)]'
+                            : 'border-slate-700 bg-gradient-to-b from-slate-800 to-slate-900 hover:border-slate-600 hover:from-slate-700'}
+                        ${!canAfford ? 'opacity-50 grayscale' : ''}
+                        `}
+                    >
+                        <div className="w-10 h-10 flex items-center justify-center">
+                            <TowerIcon type={config.type} era={uiState.era} />
+                        </div>
+                        <div className="text-[8px] text-slate-300 font-medium truncate w-full text-center px-1">
+                            {towerName}
+                        </div>
+                        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${canAfford ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
+                            ${config.cost}
+                        </div>
+                        {isSelected && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                                <Check size={10} className="text-yellow-900" />
+                            </div>
+                        )}
                     </button>
                     );
                 })}
