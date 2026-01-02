@@ -4,7 +4,7 @@ import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Ma
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, THEMES, ERA_DATA, UNIT_TYPES } from '../constants';
 import { audioService } from '../services/audioService';
 import { socketService } from '../services/socketService';
-import { Heart, Coins, Play, Check, ArrowUpCircle, Sword, Wifi, PlayCircle, Clock, Home, Zap, FastForward } from 'lucide-react';
+import { Heart, Coins, Play, Check, ArrowUpCircle, Sword, Wifi, PlayCircle, Clock, Home, Zap, FastForward, Users } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -51,22 +51,16 @@ const generateWaveEnemies = (wave: number) => {
     const baseCount = 5 + Math.floor(wave * 2);
     const queue: { type: EnemyType; delay: number }[] = [];
     
-    // FIX: Using constant intervals for delay (e.g. 30 frames) instead of cumulative (i * 30)
-    // The game loop consumes 'delay' each frame, so this represents the gap BETWEEN enemies.
-    
+    // Constant intervals for standard AI waves
     if (wave % 5 === 0) {
-        // BOSS WAVE
-        queue.push({ type: EnemyType.BOSS, delay: 0 }); // First one instant
+        queue.push({ type: EnemyType.BOSS, delay: 0 });
         for(let i=0; i<5; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
     } else if (wave % 3 === 0) {
-        // TANK WAVE
         for(let i=0; i<3; i++) queue.push({ type: EnemyType.TANK, delay: i === 0 ? 0 : 80 });
         for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
     } else if (wave % 2 === 0) {
-        // FAST WAVE
         for(let i=0; i<baseCount + 5; i++) queue.push({ type: EnemyType.FAST, delay: i === 0 ? 0 : 20 });
     } else {
-        // NORMAL WAVE
         for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: i === 0 ? 0 : 35 });
     }
     return queue;
@@ -122,16 +116,10 @@ const drawEnemySprite = (ctx: CanvasRenderingContext2D, enemy: Enemy, era: numbe
     ctx.fill();
 
     // Walking Animation (Legs)
-    // Faster enemies have faster leg movement
     const walkSpeed = enemy.type === EnemyType.FAST ? 0.4 : 0.2;
     const walkCycle = Math.sin(gameTime * walkSpeed);
     const bob = Math.abs(walkCycle) * 2;
     
-    // Rotate towards movement direction slightly? No, rotation is handled by canvas context in caller if needed, 
-    // but here we assume standard orientation. Let's create a "facing" effect if needed, but 2D top down usually face movement.
-    // For this simple drawing, we draw them "upright" but the caller translates x/y.
-    
-    // Apply Bobbing
     ctx.translate(0, -bob);
 
     // --- LEGS ---
@@ -139,137 +127,50 @@ const drawEnemySprite = (ctx: CanvasRenderingContext2D, enemy: Enemy, era: numbe
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
     
-    // Left Leg
-    ctx.beginPath();
-    ctx.moveTo(-4, 0);
-    ctx.lineTo(-4, 8 + (walkCycle * 4)); 
-    ctx.stroke();
-
-    // Right Leg
-    ctx.beginPath();
-    ctx.moveTo(4, 0);
-    ctx.lineTo(4, 8 - (walkCycle * 4)); 
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-4, 8 + (walkCycle * 4)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(4, 8 - (walkCycle * 4)); ctx.stroke();
 
     // --- BODY & HEAD VARIATIONS ---
-
     if (enemy.type === EnemyType.FAST) {
-        // FAST: Leaning forward, Ninja style
         ctx.rotate(15 * Math.PI / 180); 
-        
-        // Body
         ctx.fillStyle = enemy.color;
-        ctx.beginPath();
-        ctx.roundRect(-6, -12, 12, 14, 4);
-        ctx.fill();
-        
-        // Head (smaller, sleek)
-        ctx.fillStyle = '#fde68a'; // Skin
-        ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
-        
-        // Bandana/Headband
-        ctx.fillStyle = enemy.color;
-        ctx.fillRect(-5, -16, 10, 3);
-        // Bandana tails flowing back
+        ctx.beginPath(); ctx.roundRect(-6, -12, 12, 14, 4); ctx.fill();
+        ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = enemy.color; ctx.fillRect(-5, -16, 10, 3);
         ctx.beginPath(); ctx.moveTo(-5, -15); ctx.lineTo(-12, -18 + Math.sin(gameTime*0.3)*3); ctx.stroke();
-
-        // Arms (Trailing behind)
-        ctx.strokeStyle = enemy.color;
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = enemy.color; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(-5, -10); ctx.lineTo(-10, -5); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(5, -10); ctx.lineTo(10, -5); ctx.stroke();
-
     } else if (enemy.type === EnemyType.TANK) {
-        // TANK: Big, Bulky, Armored
-        
-        // Body (Armor)
-        ctx.fillStyle = '#334155'; // Dark Armor
-        ctx.beginPath();
-        ctx.roundRect(-10, -15, 20, 18, 2);
-        ctx.fill();
-        ctx.strokeStyle = '#94a3b8'; // Trim
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Helmet
-        ctx.fillStyle = '#64748b'; 
-        ctx.beginPath(); ctx.arc(0, -16, 8, 0, Math.PI*2); ctx.fill();
-        // Visor
-        ctx.fillStyle = '#0ea5e9';
-        ctx.fillRect(-4, -18, 8, 3);
-
-        // Arms (Holding big shield/weapon implied by bulk)
-        ctx.fillStyle = '#334155';
-        ctx.beginPath(); ctx.arc(-12, -8, 5, 0, Math.PI*2); ctx.fill(); // Left Shoulder
-        ctx.beginPath(); ctx.arc(12, -8, 5, 0, Math.PI*2); ctx.fill(); // Right Shoulder
-
+        ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.roundRect(-10, -15, 20, 18, 2); ctx.fill();
+        ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.arc(0, -16, 8, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#0ea5e9'; ctx.fillRect(-4, -18, 8, 3);
+        ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.arc(-12, -8, 5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(12, -8, 5, 0, Math.PI*2); ctx.fill();
     } else if (enemy.type === EnemyType.BOSS) {
-        // BOSS: Giant, Intimidating
-        const scale = 1.5;
-        ctx.scale(scale, scale);
-
-        // Cape
-        ctx.fillStyle = '#7f1d1d';
-        ctx.beginPath(); ctx.moveTo(-8, -10); ctx.lineTo(-12, 10); ctx.lineTo(12, 10); ctx.lineTo(8, -10); ctx.fill();
-
-        // Body (Gold/Red Armor)
-        ctx.fillStyle = enemy.color; // Red usually
-        ctx.beginPath();
-        ctx.roundRect(-8, -15, 16, 18, 4);
-        ctx.fill();
-        
-        // Chest plate
-        ctx.fillStyle = '#f59e0b'; // Gold
-        ctx.beginPath(); ctx.moveTo(-6, -15); ctx.lineTo(0, -5); ctx.lineTo(6, -15); ctx.fill();
-
-        // Head (Crown)
-        ctx.fillStyle = '#fde68a'; // Skin
-        ctx.beginPath(); ctx.arc(0, -18, 6, 0, Math.PI*2); ctx.fill();
-        // Crown
-        ctx.fillStyle = '#f59e0b';
-        ctx.beginPath(); ctx.moveTo(-6, -20); ctx.lineTo(-3, -24); ctx.lineTo(0, -20); ctx.lineTo(3, -24); ctx.lineTo(6, -20); ctx.lineTo(6, -16); ctx.lineTo(-6, -16); ctx.fill();
-
-        // Glowing Eyes
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(-2, -19, 1, 1);
-        ctx.fillRect(1, -19, 1, 1);
-
+        const scale = 1.5; ctx.scale(scale, scale);
+        ctx.fillStyle = '#7f1d1d'; ctx.beginPath(); ctx.moveTo(-8, -10); ctx.lineTo(-12, 10); ctx.lineTo(12, 10); ctx.lineTo(8, -10); ctx.fill();
+        ctx.fillStyle = enemy.color; ctx.beginPath(); ctx.roundRect(-8, -15, 16, 18, 4); ctx.fill();
+        ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.moveTo(-6, -15); ctx.lineTo(0, -5); ctx.lineTo(6, -15); ctx.fill();
+        ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, -18, 6, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.moveTo(-6, -20); ctx.lineTo(-3, -24); ctx.lineTo(0, -20); ctx.lineTo(3, -24); ctx.lineTo(6, -20); ctx.lineTo(6, -16); ctx.lineTo(-6, -16); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillRect(-2, -19, 1, 1); ctx.fillRect(1, -19, 1, 1);
     } else {
-        // NORMAL: Standard Soldier/Grunt
-        
-        // Body (Uniform)
-        ctx.fillStyle = enemy.color;
-        ctx.beginPath();
-        ctx.roundRect(-6, -12, 12, 14, 3);
-        ctx.fill();
-
-        // Head
-        ctx.fillStyle = '#fde68a'; // Skin
-        ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
-        
-        // Helmet/Hat
-        ctx.fillStyle = '#475569';
-        ctx.beginPath(); ctx.arc(0, -15, 5.5, Math.PI, 0); ctx.fill();
-
-        // Arms (Holding gun/stick)
-        ctx.strokeStyle = '#fde68a';
-        ctx.lineWidth = 3;
-        // Right arm holding something
+        ctx.fillStyle = enemy.color; ctx.beginPath(); ctx.roundRect(-6, -12, 12, 14, 3); ctx.fill();
+        ctx.fillStyle = '#fde68a'; ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.arc(0, -15, 5.5, Math.PI, 0); ctx.fill();
+        ctx.strokeStyle = '#fde68a'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(5, -10); ctx.lineTo(8, -5); ctx.stroke();
-        // Weapon
-        ctx.fillStyle = '#000';
-        ctx.fillRect(6, -7, 6, 2);
+        ctx.fillStyle = '#000'; ctx.fillRect(6, -7, 6, 2);
     }
 
-    // Health Bar (Floating above head)
     const hpPct = enemy.hp / enemy.maxHp;
     if (hpPct < 1.0) {
-        ctx.fillStyle = '#111';
-        ctx.fillRect(-10, -30, 20, 4);
+        ctx.fillStyle = '#111'; ctx.fillRect(-10, -30, 20, 4);
         ctx.fillStyle = hpPct < 0.3 ? '#ef4444' : hpPct < 0.6 ? '#eab308' : '#22c55e';
         ctx.fillRect(-9, -29, 18 * hpPct, 2);
     }
-
     ctx.restore();
 };
 
@@ -288,40 +189,13 @@ const drawProjectile = (ctx: CanvasRenderingContext2D, proj: Projectile, era: nu
 
 const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
     const iconMap: Record<number, Partial<Record<TowerType, string>>> = {
-        0: { // Stone Age
-            [TowerType.BASIC]: "🪃",
-            [TowerType.RAPID]: "🏹",
-            [TowerType.SNIPER]: "🔱",
-            [TowerType.AOE]: "🪨",
-        },
-        1: { // Castle Age
-            [TowerType.BASIC]: "🏰",
-            [TowerType.RAPID]: "🤺",
-            [TowerType.SNIPER]: "🎯",
-            [TowerType.AOE]: "💣",
-            [TowerType.LASER]: "🔮",
-            [TowerType.FROST]: "❄️",
-        },
-        2: { // Imperial Age
-            [TowerType.BASIC]: "🔫",
-            [TowerType.RAPID]: "⚙️",
-            [TowerType.SNIPER]: "🎯",
-            [TowerType.AOE]: "💥",
-            [TowerType.LASER]: "⚡",
-            [TowerType.FROST]: "🧊",
-            [TowerType.SHOCK]: "⚡",
-            [TowerType.MISSILE]: "🚀",
-        }
+        0: { [TowerType.BASIC]: "🪃", [TowerType.RAPID]: "🏹", [TowerType.SNIPER]: "🔱", [TowerType.AOE]: "🪨" },
+        1: { [TowerType.BASIC]: "🏰", [TowerType.RAPID]: "🤺", [TowerType.SNIPER]: "🎯", [TowerType.AOE]: "💣", [TowerType.LASER]: "🔮", [TowerType.FROST]: "❄️" },
+        2: { [TowerType.BASIC]: "🔫", [TowerType.RAPID]: "⚙️", [TowerType.SNIPER]: "🎯", [TowerType.AOE]: "💥", [TowerType.LASER]: "⚡", [TowerType.FROST]: "🧊", [TowerType.SHOCK]: "⚡", [TowerType.MISSILE]: "🚀" }
     };
-
     const icon = iconMap[era]?.[type] || "🗼";
     const bgColors = ['bg-amber-900/60', 'bg-slate-600/60', 'bg-slate-800/60'];
-
-    return (
-        <div className={`w-full h-full ${bgColors[era]} rounded-lg flex items-center justify-center text-2xl shadow-inner border border-white/10`}>
-            {icon}
-        </div>
-    );
+    return <div className={`w-full h-full ${bgColors[era]} rounded-lg flex items-center justify-center text-2xl shadow-inner border border-white/10`}>{icon}</div>;
 };
 
 // --- GAME COMPONENT ---
@@ -337,12 +211,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   const bgPatternRef = useRef<CanvasPattern | null>(null);
   const sceneryRef = useRef<{x: number, y: number, r: number, type: 'tree' | 'rock' | 'bush'}[]>([]);
 
-  // GAME STATE REFS (Single Source of Truth)
+  // GAME STATE REFS
   const gameStateRef = useRef<GameState>({
     ...INITIAL_STATE,
     mode: initialMode,
     lives: 20,
-    money: 100, // Starting Money
+    money: initialMode === 'PVP_ONLINE' ? 600 : 100, // Higher starting money for PvP to get into action
     wave: 1,
     gameTime: 0,
     era: 0,
@@ -351,7 +225,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     autoStartTimer: BUILD_PHASE_DURATION,
     isPlaying: false,
     isGameOver: false,
-    gameSpeed: 1 // CRITICAL: Game loop multiplier
+    gameSpeed: 1
   });
   
   // Entities Refs
@@ -366,7 +240,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
   const [notification, setNotification] = useState<{title: string, subtitle?: string, color: string} | null>(null);
   const [currentMap, setCurrentMap] = useState<MapDefinition>(MAPS[0]);
-  const [hasStartedGame, setHasStartedGame] = useState(false); // Controls "Ready" Screen only
+  const [hasStartedGame, setHasStartedGame] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
 
   const triggerHaptic = (style: 'light' | 'medium' | 'error' | 'success') => {
@@ -391,23 +265,55 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     }
   }, []);
 
-  // Initialize Logic (Only on Start Button Click)
+  // --- SPAWN HELPER ---
+  const spawnLocalEnemy = useCallback((type: EnemyType) => {
+    const stats = ENEMY_STATS[type];
+    const waveMult = 1 + (gameStateRef.current.wave * 0.1);
+    enemiesRef.current.push({
+        id: Math.random().toString(36), position: { ...currentMap.waypoints[0] }, 
+        type: type, hp: stats.maxHp * waveMult, maxHp: stats.maxHp * waveMult, speed: stats.speed,
+        pathIndex: 0, distanceTraveled: 0, frozen: 0, moneyReward: stats.reward, expReward: stats.expReward, color: stats.color, radius: stats.radius
+    });
+    audioService.playAlarm(); // Sound effect when enemy spawned
+  }, [currentMap]);
+
+  // --- SOCKET EVENT LISTENERS ---
+  useEffect(() => {
+    if (!onlineGameId) return;
+
+    socketService.onOpponentAction((action) => {
+        if (action.type === 'SPAWN') {
+             // Both Attacker (feedback) and Defender (threat) see the enemy
+             spawnLocalEnemy(action.payload.type);
+             setNotification({ title: "ENEMY SPOTTED", subtitle: "Opponent sent reinforcements!", color: "text-red-400" });
+             setTimeout(() => setNotification(null), 1500);
+        } else if (action.type === 'TOWER_BUILD') {
+             // Update towers for Attacker so they see what they are up against
+             if (onlineRole === 'ATTACKER') {
+                 towersRef.current.push(action.payload);
+                 audioService.playBuild();
+             }
+        }
+    });
+  }, [onlineGameId, onlineRole, spawnLocalEnemy]);
+
+  // Initialize Game Logic
   const initializeGame = useCallback(() => {
       setHasStartedGame(true);
       gameStateRef.current = {
           ...INITIAL_STATE,
           mode: initialMode,
           lives: 20,
-          money: initialMode === 'PVP_LOCAL' || initialMode === 'PVP_ONLINE' ? 2000 : 450, // More starting money to build
+          money: initialMode === 'PVP_ONLINE' ? 600 : 450,
           wave: 1,
           gameTime: 0,
           era: 0,
           exp: 0,
           maxExp: ERA_DATA[0].maxExp,
-          autoStartTimer: BUILD_PHASE_DURATION, // 10s Build Phase
-          isPlaying: false, // Wait for timer
+          autoStartTimer: BUILD_PHASE_DURATION,
+          isPlaying: initialMode === 'PVP_ONLINE', // PvP starts immediately
           isGameOver: false,
-          gameSpeed: 1 // Game loop multiplier
+          gameSpeed: 1
       };
       
       towersRef.current = [];
@@ -421,67 +327,62 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   }, [initialMode]);
 
 
-  // --- CORE LOGIC: START WAVE ---
+  // --- START WAVE ---
   const handleStartWave = useCallback(() => {
     const state = gameStateRef.current;
     if (!state.isPlaying && !state.isGameOver) {
-        // Start the wave
         state.isPlaying = true;
         state.autoStartTimer = -1;
         
-        // Generate enemies
-        const newEnemies = generateWaveEnemies(state.wave);
-        spawnQueueRef.current = newEnemies;
+        // Only generate AI enemies if NOT in PvP mode
+        if (initialMode !== 'PVP_ONLINE') {
+            const newEnemies = generateWaveEnemies(state.wave);
+            spawnQueueRef.current = newEnemies;
+        }
         
         audioService.playWaveStart(state.era);
         triggerHaptic('medium');
         setUiState(prev => ({ ...prev, isPlaying: true, autoStartTimer: -1 }));
         setCountdown(null);
     }
-  }, []);
+  }, [initialMode]);
 
   // --- UPDATE LOOP ---
   const update = useCallback(() => {
     const state = gameStateRef.current;
     if (state.isGameOver) return;
 
-    // 1. BUILD PHASE TIMER
-    if (!state.isPlaying && hasStartedGame) {
+    // 1. BUILD PHASE TIMER (Only for Solo)
+    if (!state.isPlaying && hasStartedGame && initialMode !== 'PVP_ONLINE') {
         if (state.autoStartTimer > 0) {
             state.autoStartTimer--;
-            if (state.autoStartTimer === 0) {
-                handleStartWave();
-            }
+            if (state.autoStartTimer === 0) handleStartWave();
         }
     }
 
-    // 2. GAME PHYSICS (Always update projectiles/enemies if they exist, but only spawn if playing)
+    // 2. PASSIVE INCOME FOR ATTACKER (To keep sending units)
+    if (initialMode === 'PVP_ONLINE' && onlineRole === 'ATTACKER' && state.gameTime % 60 === 0) {
+        state.money += 5; // Passive drip
+    }
+
+    // 3. GAME PHYSICS
     const loops = state.gameSpeed;
     for (let loop = 0; loop < loops; loop++) {
         state.gameTime++;
         
-        // Spawning (Only if playing)
-        if (state.isPlaying) {
+        // Spawning (Solo AI Only)
+        if (state.isPlaying && initialMode !== 'PVP_ONLINE') {
             const queue = spawnQueueRef.current;
             if (queue.length > 0) {
                 if (queue[0].delay <= 0) {
                     const nextEnemy = queue.shift();
-                    if (nextEnemy) {
-                        const stats = ENEMY_STATS[nextEnemy.type];
-                        const waveMult = 1 + (state.wave * 0.1);
-                        enemiesRef.current.push({
-                            id: Math.random().toString(36), position: { ...currentMap.waypoints[0] }, 
-                            type: nextEnemy.type, hp: stats.maxHp * waveMult, maxHp: stats.maxHp * waveMult, speed: stats.speed,
-                            pathIndex: 0, distanceTraveled: 0, frozen: 0, moneyReward: stats.reward, expReward: stats.expReward, color: stats.color, radius: stats.radius
-                        });
-                    }
+                    if (nextEnemy) spawnLocalEnemy(nextEnemy.type);
                 } else queue[0].delay--;
             } else if (enemiesRef.current.length === 0) {
-                // Wave Complete
                 state.isPlaying = false;
                 state.wave++;
                 state.money += 150 + (state.wave * 25);
-                state.autoStartTimer = BUILD_PHASE_DURATION; // Reset 10s Timer
+                state.autoStartTimer = BUILD_PHASE_DURATION;
                 setNotification({ title: "WAVE COMPLETE", subtitle: "PREPARE DEFENSES", color: "text-green-400" });
                 setTimeout(() => setNotification(null), 2500);
                 audioService.playBuild();
@@ -563,17 +464,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         }
     }
 
-    // UI Sync (Every 5 frames or if significant change)
+    // UI Sync
     if (state.gameTime % 5 === 0 || !state.isPlaying) {
         setUiState({...state});
-        if (state.autoStartTimer > 0 && hasStartedGame && !state.isPlaying) {
+        if (state.autoStartTimer > 0 && hasStartedGame && !state.isPlaying && initialMode !== 'PVP_ONLINE') {
             setCountdown(Math.ceil(state.autoStartTimer / 60));
         } else {
             setCountdown(null);
         }
     }
 
-  }, [onGameOver, currentMap, hasStartedGame, handleStartWave]);
+  }, [onGameOver, currentMap, hasStartedGame, handleStartWave, initialMode, onlineRole, spawnLocalEnemy]);
 
   // --- RENDERING LOOP ---
   const calculateTransform = () => {
@@ -607,8 +508,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     projectilesRef.current.forEach(proj => drawProjectile(ctx, proj, gameStateRef.current.era));
     floatingTextsRef.current.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = 'bold 16px Arial'; ctx.fillText(ft.text, ft.position.x, ft.position.y); });
 
-    // Ghost Tower (Placement Preview)
-    if (selectedTowerType && mousePosRef.current && hasStartedGame && !gameStateRef.current.isGameOver) {
+    // Ghost Tower (Placement Preview) - ONLY DEFENDER CAN BUILD
+    if (selectedTowerType && mousePosRef.current && hasStartedGame && !gameStateRef.current.isGameOver && onlineRole !== 'ATTACKER') {
         const gx = Math.floor(mousePosRef.current.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const gy = Math.floor(mousePosRef.current.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const config = TOWER_TYPES[selectedTowerType];
@@ -625,7 +526,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         ctx.beginPath(); ctx.arc(gx, gy, 15, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
-  }, [currentMap, selectedTowerType, canvasDimensions, hasStartedGame]);
+  }, [currentMap, selectedTowerType, canvasDimensions, hasStartedGame, onlineRole]);
 
   // --- INPUT HANDLERS ---
   const getCanvasCoordinates = (clientX: number, clientY: number) => {
@@ -644,12 +545,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     isPointerDownRef.current = false;
+    // ATTACKER CANNOT CLICK MAP TO BUILD
+    if (onlineRole === 'ATTACKER') return;
+
     const pos = getCanvasCoordinates(e.clientX, e.clientY);
     if (!pos || !selectedTowerType) return;
     
     // Logic to place tower:
     const gx = Math.floor(pos.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
-    // FIX: Using pos.y and dividing by GRID_SIZE before floor
     const gy = Math.floor(pos.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
     const config = TOWER_TYPES[selectedTowerType];
     const state = gameStateRef.current;
@@ -659,14 +562,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     
     if (isValid) {
         state.money -= config.cost;
-        towersRef.current.push({
+        const newTower: Tower = {
             id: Math.random().toString(), position: { x: gx, y: gy }, type: config.type,
             range: config.range, damage: config.damage, cooldown: config.cooldown, lastShotFrame: 0, rotation: 0, level: 1, eraBuilt: state.era
-        });
+        };
+        towersRef.current.push(newTower);
+        
+        // Notify Attacker
+        if (onlineGameId) {
+            socketService.sendAction(onlineGameId, 'TOWER_BUILD', newTower);
+        }
+
         audioService.playBuild();
         triggerHaptic('light');
-        setUiState({...state}); // Force React Update immediately for UI money
-        setSelectedTowerType(null); // Deselect after build
+        setUiState({...state}); 
+        setSelectedTowerType(null); 
     } else {
         triggerHaptic('error');
     }
@@ -677,32 +587,42 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     if (state.era < 2 && state.exp >= state.maxExp) {
         state.exp -= state.maxExp;
         state.era++;
-
-        if (ERA_DATA[state.era]) {
-            state.maxExp = ERA_DATA[state.era].maxExp;
-        }
-
+        if (ERA_DATA[state.era]) state.maxExp = ERA_DATA[state.era].maxExp;
         triggerHaptic('success');
         audioService.playBuild();
-
-        setNotification({
-            title: `${ERA_DATA[state.era].name}`,
-            subtitle: "NEW TECHNOLOGY UNLOCKED",
-            color: "text-yellow-400"
-        });
+        setNotification({ title: `${ERA_DATA[state.era].name}`, subtitle: "NEW TECHNOLOGY UNLOCKED", color: "text-yellow-400" });
         setTimeout(() => setNotification(null), 3000);
-
         setUiState({ ...state });
     }
   }, []);
 
-  // Speed Toggle (Solo Mode Only)
   const handleToggleSpeed = useCallback(() => {
     const state = gameStateRef.current;
     state.gameSpeed = state.gameSpeed === 1 ? 2 : 1;
     triggerHaptic('light');
     setUiState({ ...state });
   }, []);
+
+  // --- ATTACKER ACTION ---
+  const handleBuyUnit = (unitKey: string) => {
+      const config = UNIT_TYPES[unitKey];
+      const state = gameStateRef.current;
+      
+      if (state.money >= config.cost) {
+          state.money -= config.cost;
+          triggerHaptic('medium');
+          setUiState({...state});
+          
+          // Send to Server
+          if (onlineGameId) {
+              socketService.sendAction(onlineGameId, 'SPAWN', { type: config.type });
+          }
+          // Spawn locally for visual feedback
+          spawnLocalEnemy(config.type);
+      } else {
+          triggerHaptic('error');
+      }
+  };
 
   // --- RAF LOOP ---
   useEffect(() => {
@@ -724,6 +644,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
   // --- JSX RENDER ---
   const canEvolve = uiState.era < 2 && uiState.exp >= uiState.maxExp;
+  const isAttacker = onlineRole === 'ATTACKER';
+  const isDefender = onlineRole === 'DEFENDER' || !onlineRole;
 
   return (
     <div className="flex flex-col gap-2 w-full h-full overflow-hidden box-border bg-[#1c1917]">
@@ -737,63 +659,44 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         {/* TOP HUD */}
         {hasStartedGame && !uiState.isGameOver && (
             <>
-                {/* Top Bar - Wave left, Controls right */}
                 <div className="absolute top-2 left-2 right-2 flex items-start justify-between pointer-events-none z-10">
-                    {/* Left: Wave Info */}
-                    <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10">
-                        <Home size={14} className="text-amber-400" />
-                        <span className="text-white/90 font-bold text-sm">Wave {uiState.wave}</span>
-                        {uiState.isPlaying && enemiesRef.current.length > 0 && (
-                            <span className="text-red-400 text-xs">({enemiesRef.current.length})</span>
-                        )}
-                    </div>
+                    {/* Role Badge */}
+                    {onlineRole && (
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm ${isAttacker ? 'bg-red-950/80 border-red-500/30' : 'bg-blue-950/80 border-blue-500/30'}`}>
+                             {isAttacker ? <Sword size={14} className="text-red-400" /> : <Home size={14} className="text-blue-400" />}
+                             <span className={`font-bold text-xs ${isAttacker ? 'text-red-100' : 'text-blue-100'}`}>{onlineRole}</span>
+                        </div>
+                    )}
+                    
+                    {!onlineRole && (
+                        <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-white/10">
+                            <Home size={14} className="text-amber-400" />
+                            <span className="text-white/90 font-bold text-sm">Wave {uiState.wave}</span>
+                        </div>
+                    )}
 
-                    {/* Right: Controls */}
                     <div className="flex items-center gap-2 pointer-events-auto">
-                        {/* Evolution Button - Small */}
-                        {canEvolve && (
-                            <button
-                                onClick={handleEvolve}
-                                className="flex items-center gap-1.5 bg-gradient-to-r from-yellow-500 to-amber-500
-                                           px-3 py-1.5 rounded-lg border border-yellow-300
-                                           shadow-[0_0_12px_rgba(234,179,8,0.5)] animate-pulse
-                                           active:scale-95 transition-all"
-                            >
+                        {canEvolve && isDefender && (
+                            <button onClick={handleEvolve} className="flex items-center gap-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 px-3 py-1.5 rounded-lg border border-yellow-300 shadow-[0_0_12px_rgba(234,179,8,0.5)] animate-pulse active:scale-95 transition-all">
                                 <ArrowUpCircle size={14} className="text-yellow-900" />
                                 <span className="text-yellow-900 font-bold text-xs">EVOLVE</span>
                             </button>
                         )}
-
-                        {/* Speed Toggle - Solo Mode Only */}
                         {initialMode === 'DEFENSE' && (
-                            <button
-                                onClick={handleToggleSpeed}
-                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border transition-all active:scale-95
-                                    ${uiState.gameSpeed === 2
-                                        ? 'bg-green-500/90 border-green-300 text-green-900'
-                                        : 'bg-black/60 backdrop-blur-sm border-white/10 text-white/70 hover:bg-white/10'
-                                    }`}
-                            >
-                                <FastForward size={14} />
-                                <span className="font-bold text-xs">x{uiState.gameSpeed}</span>
+                            <button onClick={handleToggleSpeed} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border transition-all active:scale-95 ${uiState.gameSpeed === 2 ? 'bg-green-500/90 border-green-300 text-green-900' : 'bg-black/60 backdrop-blur-sm border-white/10 text-white/70 hover:bg-white/10'}`}>
+                                <FastForward size={14} /> <span className="font-bold text-xs">x{uiState.gameSpeed}</span>
                             </button>
                         )}
                     </div>
                 </div>
 
-                {/* Center: Countdown + Start Button */}
-                {countdown !== null && (
+                {countdown !== null && initialMode !== 'PVP_ONLINE' && (
                     <div className="absolute top-14 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none">
                         <div className="flex items-center gap-2 bg-yellow-500/20 backdrop-blur-sm px-4 py-1.5 rounded-full border border-yellow-500/30">
                             <Clock size={14} className="text-yellow-400" />
                             <span className="text-yellow-300 font-bold text-sm">Starts in {countdown}s</span>
                         </div>
-                        <button
-                            onClick={handleStartWave}
-                            className="pointer-events-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500
-                                       text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2
-                                       shadow-lg shadow-green-900/50 active:scale-95 transition-all border border-green-400/30"
-                        >
+                        <button onClick={handleStartWave} className="pointer-events-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg shadow-green-900/50 active:scale-95 transition-all border border-green-400/30">
                             <PlayCircle size={14} /> START NOW
                         </button>
                     </div>
@@ -806,20 +709,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
             <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-slate-900/90 to-black/90 flex flex-col items-center justify-center rounded-xl z-20 backdrop-blur-md">
                 <div className="bg-gradient-to-b from-[#292524] to-[#1c1917] p-8 rounded-2xl border-2 border-amber-600/50 text-center shadow-2xl w-[320px]">
                     <div className="text-5xl mb-4">🏰</div>
-                    <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-300 mb-3 tracking-widest">
-                        READY?
-                    </h2>
+                    <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-300 mb-3 tracking-widest">READY?</h2>
                     <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                        Build your defenses before the enemy horde arrives!
+                        {isAttacker ? "Buy units to destroy the defender." : "Build towers to stop the invader."}
                     </p>
-                    <button
-                        onClick={initializeGame}
-                        className="w-full px-6 py-4 bg-gradient-to-r from-orange-600 to-amber-600
-                                   hover:from-orange-500 hover:to-amber-500
-                                   text-white rounded-xl font-black flex items-center justify-center gap-3
-                                   text-lg tracking-widest shadow-lg shadow-orange-900/50
-                                   active:scale-[0.98] transition-all border border-orange-400/30"
-                    >
+                    <button onClick={initializeGame} className="w-full px-6 py-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-xl font-black flex items-center justify-center gap-3 text-lg tracking-widest shadow-lg shadow-orange-900/50 active:scale-[0.98] transition-all border border-orange-400/30">
                         <Play size={24} /> START GAME
                     </button>
                 </div>
@@ -830,14 +724,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         {notification && (
             <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none flex flex-col items-center justify-center">
                 <div className="bg-black/80 backdrop-blur-md px-8 py-6 rounded-2xl border border-white/20 shadow-2xl">
-                    <h2 className={`font-black text-4xl ${notification.color} drop-shadow-lg tracking-widest text-center`}>
-                        {notification.title}
-                    </h2>
-                    {notification.subtitle && (
-                        <div className="text-white/80 text-sm font-medium mt-3 text-center tracking-wide">
-                            {notification.subtitle}
-                        </div>
-                    )}
+                    <h2 className={`font-black text-4xl ${notification.color} drop-shadow-lg tracking-widest text-center`}>{notification.title}</h2>
+                    {notification.subtitle && <div className="text-white/80 text-sm font-medium mt-3 text-center tracking-wide">{notification.subtitle}</div>}
                 </div>
             </div>
         )}
@@ -846,40 +734,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         {uiState.isGameOver && (
             <div className="absolute inset-0 bg-gradient-to-b from-red-950/95 via-black/95 to-black/95 flex flex-col items-center justify-center z-40 backdrop-blur-sm">
                 <div className="bg-gradient-to-b from-slate-900 to-slate-950 p-8 rounded-2xl border-2 border-red-600/50 text-center shadow-2xl w-[320px]">
-                    <div className="text-6xl mb-4">💀</div>
-                    <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500 mb-2 tracking-widest">
-                        GAME OVER
-                    </h2>
-                    <p className="text-slate-400 text-sm mb-4">Your defenses have fallen!</p>
-
-                    <div className="bg-black/50 rounded-xl p-4 mb-6 border border-slate-700">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-slate-400 text-sm">Waves Survived</span>
-                            <span className="text-2xl font-black text-white">{uiState.wave - 1}</span>
-                        </div>
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-slate-400 text-sm">Final Era</span>
-                            <span className="text-lg font-bold" style={{ color: ERA_DATA[uiState.era].color }}>
-                                {ERA_DATA[uiState.era].name}
-                            </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-slate-400 text-sm">Towers Built</span>
-                            <span className="text-lg font-bold text-yellow-400">{towersRef.current.length}</span>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={() => {
-                            initializeGame();
-                        }}
-                        className="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-orange-600
-                                   hover:from-red-500 hover:to-orange-500
-                                   text-white rounded-xl font-black flex items-center justify-center gap-3
-                                   text-lg tracking-widest shadow-lg shadow-red-900/50
-                                   active:scale-[0.98] transition-all border border-red-400/30"
-                    >
-                        <Play size={24} /> TRY AGAIN
+                    <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500 mb-2 tracking-widest">GAME OVER</h2>
+                    <p className="text-slate-400 text-sm mb-4">
+                        {isDefender ? "Your defense fell!" : "The defender survived!"}
+                    </p>
+                    <button onClick={() => initializeGame()} className="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-black flex items-center justify-center gap-3 text-lg tracking-widest shadow-lg active:scale-[0.98] transition-all">
+                        <Play size={24} /> REMATCH
                     </button>
                 </div>
             </div>
@@ -888,25 +748,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
       {/* 2. MENU BAR (Stats & Building) */}
       <div className="shrink-0 flex flex-col gap-1.5 w-full min-w-0 pb-2 px-2 relative bg-[#1c1917] z-10">
-
+        
         {/* STATS BAR */}
         <div className="bg-[#292524] px-3 py-2 rounded-lg border border-[#44403c] flex items-center justify-between w-full shadow-lg relative overflow-hidden">
-
-             {/* XP BAR - More visible */}
-             <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-800">
-                 <div
-                     className="h-full transition-all duration-300 ease-out rounded-r-full"
-                     style={{
-                         width: `${Math.min(100, (uiState.exp / uiState.maxExp) * 100)}%`,
-                         background: uiState.era === 0 ? 'linear-gradient(90deg, #d97706, #fbbf24)' :
-                                     uiState.era === 1 ? 'linear-gradient(90deg, #64748b, #94a3b8)' :
-                                     'linear-gradient(90deg, #dc2626, #f87171)',
-                         boxShadow: '0 0 8px currentColor'
-                     }}
-                 />
-             </div>
-
-             {/* Left: Lives & Money */}
+             {/* XP BAR */}
+             {isDefender && (
+                 <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-slate-800">
+                     <div className="h-full transition-all duration-300 ease-out rounded-r-full" style={{ width: `${Math.min(100, (uiState.exp / uiState.maxExp) * 100)}%`, background: uiState.era === 0 ? 'linear-gradient(90deg, #d97706, #fbbf24)' : uiState.era === 1 ? 'linear-gradient(90deg, #64748b, #94a3b8)' : 'linear-gradient(90deg, #dc2626, #f87171)' }} />
+                 </div>
+             )}
+             
              <div className="flex items-center gap-4 z-10 relative">
                 <div className="flex items-center gap-1.5 bg-red-950/50 px-2 py-1 rounded">
                     <Heart className="text-red-500 fill-red-500 w-4 h-4" />
@@ -917,63 +768,42 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                     <span className="text-base font-bold text-yellow-100">${uiState.money}</span>
                 </div>
              </div>
-
-             {/* Right: Era Info & XP */}
-             <div className="z-10 relative flex items-center gap-2">
-                 <div className="flex flex-col items-end leading-tight">
-                     <span
-                         className="text-[11px] font-bold tracking-wider uppercase"
-                         style={{ color: ERA_DATA[uiState.era].color }}
-                     >
-                         {ERA_DATA[uiState.era].name}
-                     </span>
-                     <div className="flex items-center gap-1">
-                         <span className="text-[10px] text-slate-400 font-mono">
-                             {uiState.exp}/{uiState.maxExp}
-                         </span>
-                         <span className="text-[9px] text-slate-500">XP</span>
-                     </div>
-                 </div>
-             </div>
         </div>
 
-        {/* BUILDER MENU */}
+        {/* CONTROL MENU: TOWERS (DEFENDER) vs UNITS (ATTACKER) */}
         <div className="bg-[#292524] p-1.5 rounded-lg border border-[#44403c] shadow-lg overflow-hidden">
             <div className="flex gap-2 overflow-x-auto items-center scrollbar-hide px-1 pb-1">
-                {ERA_DATA[uiState.era].availableTowers.map((type) => {
-                    const config = TOWER_TYPES[type];
-                    const isSelected = selectedTowerType === config.type;
-                    const canAfford = uiState.money >= config.cost;
-                    const towerName = ERA_DATA[uiState.era].towerNames[type] || config.baseName;
-
-                    return (
-                    <button
-                        key={config.type}
-                        onClick={() => { setSelectedTowerType(isSelected ? null : config.type); triggerHaptic('light'); }}
-                        className={`min-w-[72px] py-2 px-1 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all shrink-0 relative
-                        ${isSelected
-                            ? 'border-yellow-500 bg-gradient-to-b from-yellow-500/30 to-yellow-600/10 scale-[0.97] shadow-[0_0_12px_rgba(234,179,8,0.4)]'
-                            : 'border-slate-700 bg-gradient-to-b from-slate-800 to-slate-900 hover:border-slate-600 hover:from-slate-700'}
-                        ${!canAfford ? 'opacity-50 grayscale' : ''}
-                        `}
-                    >
-                        <div className="w-10 h-10 flex items-center justify-center">
-                            <TowerIcon type={config.type} era={uiState.era} />
-                        </div>
-                        <div className="text-[8px] text-slate-300 font-medium truncate w-full text-center px-1">
-                            {towerName}
-                        </div>
-                        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${canAfford ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
-                            ${config.cost}
-                        </div>
-                        {isSelected && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                                <Check size={10} className="text-yellow-900" />
-                            </div>
-                        )}
-                    </button>
-                    );
-                })}
+                {isDefender ? (
+                    /* DEFENDER: BUILD TOWERS */
+                    ERA_DATA[uiState.era].availableTowers.map((type) => {
+                        const config = TOWER_TYPES[type];
+                        const isSelected = selectedTowerType === config.type;
+                        const canAfford = uiState.money >= config.cost;
+                        const towerName = ERA_DATA[uiState.era].towerNames[type] || config.baseName;
+                        return (
+                        <button key={config.type} onClick={() => { setSelectedTowerType(isSelected ? null : config.type); triggerHaptic('light'); }}
+                            className={`min-w-[72px] py-2 px-1 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all shrink-0 relative ${isSelected ? 'border-yellow-500 bg-yellow-500/20' : 'border-slate-700 bg-slate-800'} ${!canAfford ? 'opacity-50 grayscale' : ''}`}>
+                            <div className="w-10 h-10 flex items-center justify-center"><TowerIcon type={config.type} era={uiState.era} /></div>
+                            <div className="text-[8px] text-slate-300 font-medium truncate w-full text-center px-1">{towerName}</div>
+                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${canAfford ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>${config.cost}</div>
+                            {isSelected && <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center"><Check size={10} className="text-yellow-900" /></div>}
+                        </button>
+                        );
+                    })
+                ) : (
+                    /* ATTACKER: SPAWN UNITS */
+                    Object.entries(UNIT_TYPES).map(([key, config]) => {
+                        const canAfford = uiState.money >= config.cost;
+                        return (
+                        <button key={key} onClick={() => handleBuyUnit(key)}
+                            className={`min-w-[72px] py-2 px-1 rounded-lg border-2 flex flex-col items-center justify-center gap-1 transition-all shrink-0 active:scale-95 border-red-900/50 bg-red-950/30 ${!canAfford ? 'opacity-50 grayscale' : 'hover:bg-red-900/50 hover:border-red-500/50'}`}>
+                            <div className="w-10 h-10 flex items-center justify-center text-2xl">{config.icon}</div>
+                            <div className="text-[8px] text-red-200 font-medium truncate w-full text-center px-1">{config.name}</div>
+                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${canAfford ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>${config.cost}</div>
+                        </button>
+                        );
+                    })
+                )}
             </div>
         </div>
       </div>

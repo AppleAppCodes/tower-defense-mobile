@@ -1,4 +1,5 @@
 
+
 export type Vector2D = { x: number; y: number };
 
 export type GameMode = 'DEFENSE' | 'ATTACK' | 'PVP_LOCAL' | 'PVP_ONLINE';
@@ -173,13 +174,13 @@ export interface WaveConfig {
 // Socket Events Payloads
 export interface ServerToClientEvents {
   match_found: (data: { role: 'DEFENDER' | 'ATTACKER', gameId: string }) => void;
-  opponent_action: (action: { type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any }) => void;
+  opponent_action: (action: { type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER' | 'TOWER_BUILD', payload: any }) => void;
   room_error: (msg: string) => void;
 }
 
 export interface ClientToServerEvents {
   join_game: (roomId: string, callback?: (response: any) => void) => void;
-  send_action: (data: { gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any }) => void;
+  send_action: (data: { gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER' | 'TOWER_BUILD', payload: any }) => void;
 }
 
 // Telegram Web App Global Types

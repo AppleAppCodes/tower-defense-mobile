@@ -1,4 +1,3 @@
-
 import { io, Socket } from 'socket.io-client';
 import { ServerToClientEvents, ClientToServerEvents } from '../types';
 
@@ -66,7 +65,7 @@ class SocketService {
     });
   }
 
-  sendAction(gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any) {
+  sendAction(gameId: string, type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER' | 'TOWER_BUILD', payload: any) {
     this.socket?.emit('send_action', { gameId, type, payload });
   }
 
@@ -78,7 +77,7 @@ class SocketService {
     });
   }
 
-  onOpponentAction(callback: (action: { type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER', payload: any }) => void) {
+  onOpponentAction(callback: (action: { type: 'SPAWN' | 'LAYOUT' | 'READY' | 'GAME_OVER' | 'TOWER_BUILD', payload: any }) => void) {
     this.socket?.off('opponent_action');
     this.socket?.on('opponent_action', callback);
   }
