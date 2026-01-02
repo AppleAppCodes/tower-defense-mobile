@@ -50,16 +50,24 @@ const createNoisePattern = (ctx: CanvasRenderingContext2D, color: string) => {
 const generateWaveEnemies = (wave: number) => {
     const baseCount = 5 + Math.floor(wave * 2);
     const queue: { type: EnemyType; delay: number }[] = [];
+    
+    // FIX: Using constant intervals for delay (e.g. 30 frames) instead of cumulative (i * 30)
+    // The game loop consumes 'delay' each frame, so this represents the gap BETWEEN enemies.
+    
     if (wave % 5 === 0) {
-        queue.push({ type: EnemyType.BOSS, delay: 0 });
-        for(let i=0; i<5; i++) queue.push({ type: EnemyType.NORMAL, delay: 60 + i*30 });
+        // BOSS WAVE
+        queue.push({ type: EnemyType.BOSS, delay: 0 }); // First one instant
+        for(let i=0; i<5; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
     } else if (wave % 3 === 0) {
-        for(let i=0; i<3; i++) queue.push({ type: EnemyType.TANK, delay: i*120 });
-        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: 300 + i*40 });
+        // TANK WAVE
+        for(let i=0; i<3; i++) queue.push({ type: EnemyType.TANK, delay: i === 0 ? 0 : 80 });
+        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
     } else if (wave % 2 === 0) {
-        for(let i=0; i<baseCount + 5; i++) queue.push({ type: EnemyType.FAST, delay: i*25 });
+        // FAST WAVE
+        for(let i=0; i<baseCount + 5; i++) queue.push({ type: EnemyType.FAST, delay: i === 0 ? 0 : 20 });
     } else {
-        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: i*45 });
+        // NORMAL WAVE
+        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: i === 0 ? 0 : 35 });
     }
     return queue;
 };
@@ -106,25 +114,162 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
 
 const drawEnemySprite = (ctx: CanvasRenderingContext2D, enemy: Enemy, era: number, gameTime: number) => {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(0, enemy.radius/2, enemy.radius, enemy.radius/2, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = enemy.color; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
-    const bob = Math.sin(gameTime * 0.2) * 2; ctx.translate(0, bob);
+    
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; 
+    ctx.beginPath(); 
+    ctx.ellipse(0, 5, enemy.radius * 0.6, enemy.radius * 0.3, 0, 0, Math.PI*2); 
+    ctx.fill();
 
-    if (enemy.type === EnemyType.NORMAL) {
-        ctx.beginPath(); ctx.arc(0, 0, enemy.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(-4, -2, 4, 0, Math.PI*2); ctx.arc(4, -2, 4, 0, Math.PI*2); ctx.fill();
-    } else if (enemy.type === EnemyType.FAST) {
-        ctx.beginPath(); ctx.moveTo(0, -enemy.radius); ctx.lineTo(enemy.radius, enemy.radius); ctx.lineTo(-enemy.radius, enemy.radius); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Walking Animation (Legs)
+    // Faster enemies have faster leg movement
+    const walkSpeed = enemy.type === EnemyType.FAST ? 0.4 : 0.2;
+    const walkCycle = Math.sin(gameTime * walkSpeed);
+    const bob = Math.abs(walkCycle) * 2;
+    
+    // Rotate towards movement direction slightly? No, rotation is handled by canvas context in caller if needed, 
+    // but here we assume standard orientation. Let's create a "facing" effect if needed, but 2D top down usually face movement.
+    // For this simple drawing, we draw them "upright" but the caller translates x/y.
+    
+    // Apply Bobbing
+    ctx.translate(0, -bob);
+
+    // --- LEGS ---
+    ctx.strokeStyle = '#1e293b'; // Dark pants
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    
+    // Left Leg
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.lineTo(-4, 8 + (walkCycle * 4)); 
+    ctx.stroke();
+
+    // Right Leg
+    ctx.beginPath();
+    ctx.moveTo(4, 0);
+    ctx.lineTo(4, 8 - (walkCycle * 4)); 
+    ctx.stroke();
+
+    // --- BODY & HEAD VARIATIONS ---
+
+    if (enemy.type === EnemyType.FAST) {
+        // FAST: Leaning forward, Ninja style
+        ctx.rotate(15 * Math.PI / 180); 
+        
+        // Body
+        ctx.fillStyle = enemy.color;
+        ctx.beginPath();
+        ctx.roundRect(-6, -12, 12, 14, 4);
+        ctx.fill();
+        
+        // Head (smaller, sleek)
+        ctx.fillStyle = '#fde68a'; // Skin
+        ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
+        
+        // Bandana/Headband
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(-5, -16, 10, 3);
+        // Bandana tails flowing back
+        ctx.beginPath(); ctx.moveTo(-5, -15); ctx.lineTo(-12, -18 + Math.sin(gameTime*0.3)*3); ctx.stroke();
+
+        // Arms (Trailing behind)
+        ctx.strokeStyle = enemy.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-5, -10); ctx.lineTo(-10, -5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(5, -10); ctx.lineTo(10, -5); ctx.stroke();
+
     } else if (enemy.type === EnemyType.TANK) {
-        ctx.fillRect(-enemy.radius, -enemy.radius, enemy.radius*2, enemy.radius*2); ctx.strokeRect(-enemy.radius, -enemy.radius, enemy.radius*2, enemy.radius*2);
+        // TANK: Big, Bulky, Armored
+        
+        // Body (Armor)
+        ctx.fillStyle = '#334155'; // Dark Armor
+        ctx.beginPath();
+        ctx.roundRect(-10, -15, 20, 18, 2);
+        ctx.fill();
+        ctx.strokeStyle = '#94a3b8'; // Trim
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Helmet
+        ctx.fillStyle = '#64748b'; 
+        ctx.beginPath(); ctx.arc(0, -16, 8, 0, Math.PI*2); ctx.fill();
+        // Visor
+        ctx.fillStyle = '#0ea5e9';
+        ctx.fillRect(-4, -18, 8, 3);
+
+        // Arms (Holding big shield/weapon implied by bulk)
+        ctx.fillStyle = '#334155';
+        ctx.beginPath(); ctx.arc(-12, -8, 5, 0, Math.PI*2); ctx.fill(); // Left Shoulder
+        ctx.beginPath(); ctx.arc(12, -8, 5, 0, Math.PI*2); ctx.fill(); // Right Shoulder
+
     } else if (enemy.type === EnemyType.BOSS) {
-        ctx.beginPath(); ctx.arc(0, 0, enemy.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        // BOSS: Giant, Intimidating
+        const scale = 1.5;
+        ctx.scale(scale, scale);
+
+        // Cape
+        ctx.fillStyle = '#7f1d1d';
+        ctx.beginPath(); ctx.moveTo(-8, -10); ctx.lineTo(-12, 10); ctx.lineTo(12, 10); ctx.lineTo(8, -10); ctx.fill();
+
+        // Body (Gold/Red Armor)
+        ctx.fillStyle = enemy.color; // Red usually
+        ctx.beginPath();
+        ctx.roundRect(-8, -15, 16, 18, 4);
+        ctx.fill();
+        
+        // Chest plate
+        ctx.fillStyle = '#f59e0b'; // Gold
+        ctx.beginPath(); ctx.moveTo(-6, -15); ctx.lineTo(0, -5); ctx.lineTo(6, -15); ctx.fill();
+
+        // Head (Crown)
+        ctx.fillStyle = '#fde68a'; // Skin
+        ctx.beginPath(); ctx.arc(0, -18, 6, 0, Math.PI*2); ctx.fill();
+        // Crown
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath(); ctx.moveTo(-6, -20); ctx.lineTo(-3, -24); ctx.lineTo(0, -20); ctx.lineTo(3, -24); ctx.lineTo(6, -20); ctx.lineTo(6, -16); ctx.lineTo(-6, -16); ctx.fill();
+
+        // Glowing Eyes
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(-2, -19, 1, 1);
+        ctx.fillRect(1, -19, 1, 1);
+
+    } else {
+        // NORMAL: Standard Soldier/Grunt
+        
+        // Body (Uniform)
+        ctx.fillStyle = enemy.color;
+        ctx.beginPath();
+        ctx.roundRect(-6, -12, 12, 14, 3);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#fde68a'; // Skin
+        ctx.beginPath(); ctx.arc(0, -14, 5, 0, Math.PI*2); ctx.fill();
+        
+        // Helmet/Hat
+        ctx.fillStyle = '#475569';
+        ctx.beginPath(); ctx.arc(0, -15, 5.5, Math.PI, 0); ctx.fill();
+
+        // Arms (Holding gun/stick)
+        ctx.strokeStyle = '#fde68a';
+        ctx.lineWidth = 3;
+        // Right arm holding something
+        ctx.beginPath(); ctx.moveTo(5, -10); ctx.lineTo(8, -5); ctx.stroke();
+        // Weapon
+        ctx.fillStyle = '#000';
+        ctx.fillRect(6, -7, 6, 2);
     }
+
+    // Health Bar (Floating above head)
     const hpPct = enemy.hp / enemy.maxHp;
     if (hpPct < 1.0) {
-        ctx.fillStyle = '#ef4444'; ctx.fillRect(-10, -enemy.radius - 8, 20 * hpPct, 3);
-        ctx.strokeStyle = '#000'; ctx.strokeRect(-10, -enemy.radius - 8, 20, 3);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-10, -30, 20, 4);
+        ctx.fillStyle = hpPct < 0.3 ? '#ef4444' : hpPct < 0.6 ? '#eab308' : '#22c55e';
+        ctx.fillRect(-9, -29, 18 * hpPct, 2);
     }
+
     ctx.restore();
 };
 
