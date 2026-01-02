@@ -1,8 +1,8 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { Play, Copy, Users, ArrowLeft, Globe, Wifi, AlertTriangle } from 'lucide-react';
+import { Play, Users, ArrowLeft, Globe, Wifi, AlertTriangle, Plus, RefreshCw, Clock } from 'lucide-react';
 import { socketService } from '../services/socketService';
+import { supabase, GameRoom } from '../services/supabaseClient';
 
 interface LobbyProps {
   onBack: () => void;
@@ -10,15 +10,17 @@ interface LobbyProps {
 }
 
 export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
-  const [roomId, setRoomId] = useState('');
-  const [status, setStatus] = useState<'IDLE' | 'CONNECTING' | 'WAITING' | 'ERROR'>('IDLE');
+  const [rooms, setRooms] = useState<GameRoom[]>([]);
+  const [status, setStatus] = useState<'IDLE' | 'CREATING' | 'JOINING' | 'WAITING' | 'ERROR'>('IDLE');
   const [errorMessage, setErrorMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [socketError, setSocketError] = useState('');
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Connect on mount
   useEffect(() => {
     socketService.connect();
+    loadRooms();
 
     const checkConnection = setInterval(() => {
         const connected = socketService.socket?.connected || false;
@@ -30,135 +32,242 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
         }
     }, 500);
 
+    const subscription = supabase
+      .channel('game_rooms_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_rooms' }, () => {
+        loadRooms();
+      })
+      .subscribe();
+
+    const refreshInterval = setInterval(loadRooms, 5000);
+
     return () => {
         clearInterval(checkConnection);
+        clearInterval(refreshInterval);
+        subscription.unsubscribe();
     };
   }, []);
 
-  const handleJoin = async () => {
-    if (!roomId) return;
+  const loadRooms = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('game_rooms')
+        .select('*')
+        .eq('status', 'WAITING')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setRooms(data || []);
+    } catch (error) {
+      console.error('Failed to load rooms:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createRoom = async () => {
     if (!isConnected) {
-        setErrorMessage("Not connected to server yet.");
+        setErrorMessage("Not connected to server.");
         setStatus('ERROR');
         return;
     }
 
-    setStatus('CONNECTING');
+    setStatus('CREATING');
     setErrorMessage('');
-    
-    // Set up event listener *before* joining
+
+    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const userName = `Player${Math.floor(Math.random() * 9999)}`;
+
+    try {
+      const { error: insertError } = await supabase
+        .from('game_rooms')
+        .insert({
+          id: roomId,
+          host_name: userName,
+          status: 'WAITING',
+          player_count: 1,
+          max_players: 2
+        });
+
+      if (insertError) throw insertError;
+
+      socketService.onMatchFound((data) => {
+        onMatchFound(data.role, data.gameId);
+      });
+
+      const response = await socketService.joinGame(roomId);
+
+      if (response.status === 'ok') {
+        setSelectedRoomId(roomId);
+        setStatus('WAITING');
+      } else {
+        await supabase.from('game_rooms').delete().eq('id', roomId);
+        setErrorMessage(response.message || "Failed to create room.");
+        setStatus('ERROR');
+      }
+    } catch (e) {
+      setErrorMessage("Failed to create room.");
+      setStatus('ERROR');
+    }
+  };
+
+  const joinRoom = async (roomId: string) => {
+    if (!isConnected) {
+        setErrorMessage("Not connected to server.");
+        setStatus('ERROR');
+        return;
+    }
+
+    setStatus('JOINING');
+    setErrorMessage('');
+    setSelectedRoomId(roomId);
+
     socketService.onMatchFound((data) => {
-        console.log("Lobby received match_found:", data);
         onMatchFound(data.role, data.gameId);
     });
 
-    // Send Join Request and Wait for Acknowledgement
     try {
         const response = await socketService.joinGame(roomId);
-        
+
         if (response.status === 'ok') {
-            setStatus('WAITING');
-            // Note: If role is DEFENDER, the onMatchFound event usually fires immediately after this
+            await supabase
+              .from('game_rooms')
+              .update({
+                player_count: 2,
+                status: 'IN_PROGRESS',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', roomId);
         } else {
             setErrorMessage(response.message || "Failed to join room.");
             setStatus('ERROR');
+            setSelectedRoomId('');
         }
     } catch (e) {
         setErrorMessage("Network error.");
         setStatus('ERROR');
+        setSelectedRoomId('');
     }
   };
 
-  const handleCreateRandom = () => {
-      const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-      setRoomId(randomId);
-      setStatus('IDLE');
-      setErrorMessage('');
+  const getTimeAgo = (timestamp: string) => {
+    const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    return `${Math.floor(seconds / 3600)}h ago`;
   };
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-slate-950 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-950 via-slate-950 to-black z-0" />
-        
-        <div className="z-10 w-full max-w-sm p-6 flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-300">
-            <div className="flex items-center gap-2 text-slate-400 mb-4">
-                <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full"><ArrowLeft /></button>
-                <span className="font-display tracking-widest">ONLINE LOBBY</span>
+    <div className="w-full h-full flex flex-col bg-slate-950 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-950 via-slate-950 to-black z-0" />
+
+        <div className="z-10 w-full h-full flex flex-col p-4 gap-4">
+            <div className="flex items-center justify-between">
+                <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+                    <ArrowLeft size={20} />
+                    <span className="font-display text-sm">BACK</span>
+                </button>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                    <Wifi size={12} className={isConnected ? "" : "animate-pulse"} />
+                    {isConnected ? 'ONLINE' : 'CONNECTING'}
+                </div>
             </div>
 
             <div className="text-center">
-                <Globe size={48} className="mx-auto text-indigo-500 mb-4 animate-pulse" />
-                <h2 className="text-3xl font-display font-bold">MULTIPLAYER</h2>
-                <p className="text-slate-400 text-sm mt-2">Enter a Room Code to play with a friend.</p>
+                <Globe size={40} className="mx-auto text-blue-500 mb-3" />
+                <h2 className="text-2xl font-display font-bold">GAME ROOMS</h2>
+                <p className="text-slate-400 text-xs mt-1">Join an open room or create your own</p>
             </div>
 
-            {(status === 'IDLE' || status === 'ERROR') && (
-                <div className="flex flex-col gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
-                    {/* Connection Status Indicator */}
-                    <div className={`text-[10px] text-center font-mono flex flex-col items-center justify-center gap-1 p-2 rounded ${isConnected ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                         <div className="flex items-center gap-2">
-                            <Wifi size={12} className={isConnected ? "" : "animate-pulse"} />
-                            {isConnected ? "SERVER ONLINE" : "CONNECTING TO SERVER..."}
-                         </div>
-                         {!isConnected && socketError && (
-                             <div className="text-[9px] text-red-400 flex items-center gap-1 mt-1">
-                                 <AlertTriangle size={8} /> {socketError}
-                             </div>
-                         )}
-                    </div>
+            {status === 'ERROR' && (
+                <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-xs text-center font-bold flex items-center justify-center gap-2">
+                    <AlertTriangle size={14} /> {errorMessage}
+                </div>
+            )}
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase">Room Code</label>
-                        <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                value={roomId}
-                                onChange={(e) => { setRoomId(e.target.value.toUpperCase()); setStatus('IDLE'); }}
-                                placeholder="ENTER CODE"
-                                className="flex-1 bg-black/50 border border-slate-700 rounded-lg px-4 py-3 text-center font-mono text-xl tracking-widest focus:border-indigo-500 outline-none transition-colors"
-                            />
-                            <button onClick={handleCreateRandom} className="bg-slate-800 p-3 rounded-lg hover:bg-slate-700 border border-slate-700">
-                                <RefreshCwIcon /> 
-                            </button>
-                        </div>
-                    </div>
+            <button
+                onClick={createRoom}
+                disabled={!isConnected || status === 'CREATING' || status === 'JOINING' || status === 'WAITING'}
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+                <Plus size={20} /> CREATE NEW ROOM
+            </button>
 
-                    <button 
-                        onClick={handleJoin}
-                        disabled={!roomId || roomId.length < 3 || !isConnected}
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 transition-all active:scale-95"
-                    >
-                        <Users size={20} /> JOIN ROOM
+            {(status === 'CREATING' || status === 'JOINING' || status === 'WAITING') && (
+                <div className="p-6 bg-slate-900/80 rounded-xl border border-blue-500/30 backdrop-blur-sm">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <h3 className="text-lg font-bold text-blue-400">
+                            {status === 'CREATING' && 'CREATING ROOM...'}
+                            {status === 'JOINING' && 'JOINING ROOM...'}
+                            {status === 'WAITING' && 'WAITING FOR OPPONENT...'}
+                        </h3>
+                        {selectedRoomId && <p className="text-slate-400 text-sm font-mono">ROOM: {selectedRoomId}</p>}
+                        <button onClick={() => { setStatus('IDLE'); setSelectedRoomId(''); }} className="mt-2 text-xs text-red-400 hover:underline">Cancel</button>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex-1 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Available Rooms</h3>
+                    <button onClick={loadRooms} className="text-slate-500 hover:text-white transition-colors">
+                        <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
                     </button>
+                </div>
 
-                    {status === 'ERROR' && (
-                        <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-xs text-center font-bold">
-                            {errorMessage}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center h-32">
+                            <div className="w-8 h-8 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin"></div>
                         </div>
+                    ) : rooms.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-32 text-slate-500">
+                            <Users size={32} className="mb-2 opacity-50" />
+                            <p className="text-sm">No rooms available</p>
+                            <p className="text-xs mt-1">Create one to start playing</p>
+                        </div>
+                    ) : (
+                        rooms.map((room) => (
+                            <button
+                                key={room.id}
+                                onClick={() => joinRoom(room.id)}
+                                disabled={status !== 'IDLE'}
+                                className="w-full bg-slate-900/60 hover:bg-slate-800/80 border border-slate-700 hover:border-blue-500/50 rounded-lg p-4 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center border border-blue-500/30 group-hover:border-blue-500/60 transition-colors">
+                                            <Users size={20} className="text-blue-400" />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-bold text-white text-sm">{room.host_name}</div>
+                                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                                <span className="font-mono">{room.id}</span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock size={10} />
+                                                    {getTimeAgo(room.created_at)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <div className="flex items-center gap-1 text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
+                                            <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                                            OPEN
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                            {room.player_count}/{room.max_players}
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        ))
                     )}
-                    
-                    <div className="text-[10px] text-center text-slate-500 mt-2 font-mono">
-                         Server: {isConnected ? 'Online' : 'Reconnecting...'}
-                    </div>
                 </div>
-            )}
-
-            {(status === 'CONNECTING' || status === 'WAITING') && (
-                <div className="text-center p-8 bg-slate-900/50 rounded-2xl border border-indigo-500/30">
-                    <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <h3 className="text-xl font-bold text-indigo-400">
-                        {status === 'CONNECTING' ? 'JOINING ROOM...' : 'WAITING FOR OPPONENT...'}
-                    </h3>
-                    <p className="text-slate-400 text-sm mt-2 font-mono">ROOM: {roomId}</p>
-                    <p className="text-xs text-slate-500 mt-4">Waiting for server response...</p>
-                    <button onClick={() => setStatus('IDLE')} className="mt-6 text-xs text-red-400 hover:underline">Cancel</button>
-                </div>
-            )}
+            </div>
         </div>
     </div>
   );
 };
-
-const RefreshCwIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-);
