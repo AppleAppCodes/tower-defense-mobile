@@ -2,7 +2,17 @@
 import { createServer } from "http";
 import { Server } from "socket.io";
 
-const httpServer = createServer();
+// Create HTTP Server that handles basic requests (Health Check)
+const httpServer = createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Game Server is RUNNING (Port 3000)');
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
 const io = new Server(httpServer, {
   cors: {
     origin: "*", // Allow connections from anywhere (your Telegram app)
@@ -53,6 +63,7 @@ io.on("connection", (socket) => {
   });
 });
 
+// Use Port 3000 to match Cloudflare Tunnel default
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

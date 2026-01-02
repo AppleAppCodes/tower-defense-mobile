@@ -79,10 +79,6 @@ const drawTower = (
 
   // --- SPRITE RENDERING FOR SLINGER (Stone Age Basic) ---
   if (era === 0 && tower.type === TowerType.BASIC && slingerSprite) {
-      // Logic: Map the cooldown/timeSinceShot to a frame index.
-      // Assuming 42 frames in the sprite sheet.
-      // If we are shooting (timeSinceShot < 42), play animation. Otherwise idle at frame 0.
-      
       const totalFrames = 42;
       const timeSinceShot = gameTime - tower.lastShotFrame;
       
@@ -90,18 +86,12 @@ const drawTower = (
       let currentFrame = 0;
       
       if (timeSinceShot < totalFrames) {
-          // Play animation once per shot
           currentFrame = Math.floor(timeSinceShot); 
           if (currentFrame >= totalFrames) currentFrame = totalFrames - 1;
       } else {
-          // Idle Loop (Optional: Bounce between frame 0-10 or just stay at 0)
-          // For now, static idle at frame 0
           currentFrame = 0;
       }
 
-      // Calculate source position from sprite sheet
-      // Assumption: Sprite sheet is HORIZONTAL (all frames side-by-side)
-      // Frame Width = Total Width / 42
       const frameWidth = slingerSprite.width / totalFrames;
       const frameHeight = slingerSprite.height;
 
@@ -115,30 +105,21 @@ const drawTower = (
 
       // Rotate towards target
       ctx.rotate(tower.rotation);
-      // Adjust draw position to center the sprite. 
-      // Assuming sprite is roughly square-ish or centered. Adjust -frameWidth/2 as needed.
-      // We scale it down to fit the grid (approx 40x40 game units)
+      
       const drawWidth = 50; 
       const drawHeight = 50 * (frameHeight / frameWidth);
 
-      // Flip correction if needed (since rotation handles direction, usually standard draw is fine, 
-      // but if sprite faces RIGHT by default, we are good. If sprite faces DOWN, offset rotation).
-      // Assuming sprite faces RIGHT in the PNG.
-      
       ctx.drawImage(
           slingerSprite, 
           srcX, srcY, frameWidth, frameHeight, // Source
           -drawWidth/2, -drawHeight/2, drawWidth, drawHeight // Destination
       );
       ctx.restore();
-
-      // Skip default procedural drawing
       ctx.restore();
       return; 
   }
 
-  // --- FALLBACK PROCEDURAL DRAWING (For other eras/types) ---
-  
+  // --- FALLBACK PROCEDURAL DRAWING ---
   const timeSinceShot = gameTime - tower.lastShotFrame;
   let recoil = 0;
   if (era > 0 && timeSinceShot < 10) recoil = (10 - timeSinceShot) * 0.8; 
@@ -174,21 +155,74 @@ const drawTower = (
   ctx.restore(); 
 };
 
-const drawEnemySprite = (ctx: CanvasRenderingContext2D, enemy: Enemy, era: number, gameTime: number) => {
+// --- DRAW ENEMY WITH SPRITE SUPPORT ---
+const drawEnemySprite = (
+    ctx: CanvasRenderingContext2D, 
+    enemy: Enemy, 
+    era: number, 
+    gameTime: number, 
+    orcSprite: HTMLImageElement | null
+) => {
+    // If sprite is loaded (and it's a normal/grunt type for now, or use for all), draw sprite
+    if (orcSprite && (enemy.type === EnemyType.NORMAL || enemy.type === EnemyType.FAST)) {
+        const frameWidth = orcSprite.width / 7; // Assuming 7 frames like standard tutorial
+        const frameHeight = orcSprite.height;
+        
+        ctx.save();
+        
+        // Find angle to next waypoint to rotate the sprite
+        // (Tutorial sprites often just flip X, but we can rotate for full 360 movement)
+        const nextPoint = MAPS[0].waypoints[enemy.pathIndex + 1]; // Simply taking current map for now
+        let angle = 0;
+        // Calculation is handled in update loop for movement, but we can re-calc for drawing if needed
+        // For visual simplicity, let's just rotate the canvas
+        // (Note: `draw` handles translation to enemy.position before calling this)
+
+        // Draw Health Bar above sprite
+        const hpPct = enemy.hp / enemy.maxHp;
+        ctx.fillStyle = 'red'; ctx.fillRect(-10, -25, 20, 4);
+        ctx.fillStyle = '#22c55e'; ctx.fillRect(-10, -25, 20 * hpPct, 4);
+
+        // Draw Sprite
+        // We need to determine rotation. Since we don't pass rotation here, we can infer it or just draw upright if top-down.
+        // The "Orc" sprite is usually Side-View.
+        // Let's assume Top-Down game: We should rotate.
+        // Since we don't have rotation stored in Enemy, we'll draw it as a "Badge" or assume it faces right.
+        
+        const sx = enemy.frameX * frameWidth;
+        const sy = 0; // Single row
+        const size = enemy.radius * 2.5; // Scale up slightly
+        
+        ctx.drawImage(orcSprite, sx, sy, frameWidth, frameHeight, -size/2, -size/2, size, size);
+        
+        ctx.restore();
+        return;
+    }
+
+    // Fallback: Circle
     ctx.fillStyle = enemy.color;
     ctx.beginPath(); ctx.arc(0, 0, enemy.radius, 0, Math.PI*2); ctx.fill();
     ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+    
+    // HP Bar
+    const hpPct = enemy.hp / enemy.maxHp;
+    ctx.fillStyle = 'red'; ctx.fillRect(-10, -enemy.radius - 8, 20, 4);
+    ctx.fillStyle = '#22c55e'; ctx.fillRect(-10, -enemy.radius - 8, 20 * hpPct, 4);
 };
 
 const drawProjectile = (ctx: CanvasRenderingContext2D, proj: Projectile, era: number) => {
     ctx.save();
     ctx.translate(proj.position.x, proj.position.y);
+    
+    // Trails
+    ctx.fillStyle = `rgba(255,255,255,0.3)`;
+    ctx.beginPath(); ctx.arc(-proj.velocity.x * 0.5, -proj.velocity.y * 0.5, 2, 0, Math.PI*2); ctx.fill();
+
     ctx.fillStyle = proj.color || '#fff';
     ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
     ctx.restore();
 };
 
-// --- TowerIcon Component Wrapper ---
 const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
     return <div className="w-full h-full bg-slate-700/50 rounded-full flex items-center justify-center text-[8px]">{type.substring(0,2)}</div>;
 };
@@ -209,6 +243,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
   // ASSETS
   const slingerSpriteRef = useRef<HTMLImageElement | null>(null);
+  const orcSpriteRef = useRef<HTMLImageElement | null>(null);
 
   // PVP State Storage
   const p1DefenseLayout = useRef<Tower[]>([]);
@@ -228,14 +263,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   const towersRef = useRef<Tower[]>([]);
   const enemiesRef = useRef<Enemy[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
-  const particlesRef = useRef<Particle[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
-  const perkDropsRef = useRef<PerkDrop[]>([]);
-  const activePerksRef = useRef<ActivePerk[]>([]);
   const spawnQueueRef = useRef<{ type: EnemyType; delay: number }[]>([]);
   
-  const [activePerks, setActivePerks] = useState<ActivePerk[]>([]);
-  const [perkInventory, setPerkInventory] = useState<Record<PerkType, number>>({ [PerkType.DAMAGE]: 0, [PerkType.SPEED]: 0, [PerkType.MONEY]: 0, [PerkType.FREEZE]: 0 });
   const [uiState, setUiState] = useState<GameState>(gameStateRef.current);
   const [selectedTowerType, setSelectedTowerType] = useState<TowerType | null>(null);
   const [selectedPlacedTowerId, setSelectedPlacedTowerId] = useState<string | null>(null);
@@ -304,17 +334,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         for (let i = 0; i < 60; i++) sceneryRef.current.push({ x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT, r: Math.random() * 10 + 5, type: Math.random() > 0.9 ? 'rock' : Math.random() > 0.7 ? 'tree' : 'bush' });
     }
 
-    // 3. Load Sprite Sheet
-    // IMPORTANT: You need to place your 42-frame horizontal sprite sheet at /public/slinger_sheet.png
-    const img = new Image();
-    img.src = '/slinger_sheet.png'; 
-    img.onload = () => {
-        console.log("Sprite Sheet Loaded");
-        slingerSpriteRef.current = img;
-    };
-    img.onerror = () => {
-        console.warn("Sprite Sheet not found. Falling back to procedural drawing.");
-    };
+    // 3. Load Sprites
+    const imgSlinger = new Image();
+    imgSlinger.src = '/slinger_sheet.png'; 
+    imgSlinger.onload = () => { slingerSpriteRef.current = imgSlinger; };
+
+    const imgOrc = new Image();
+    imgOrc.src = '/orc.png'; // Reference to standard tutorial sprite name
+    imgOrc.onload = () => { console.log("Orc loaded"); orcSpriteRef.current = imgOrc; };
 
   }, []);
 
@@ -420,7 +447,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
               enemiesRef.current.push({
                 id: Math.random().toString(36), position: { ...currentMap.waypoints[0] }, 
                 type: nextEnemy.type, hp: stats.maxHp, maxHp: stats.maxHp, speed: stats.speed,
-                pathIndex: 0, distanceTraveled: 0, frozen: 0, moneyReward: stats.reward, expReward: stats.expReward, color: stats.color, radius: stats.radius
+                pathIndex: 0, distanceTraveled: 0, frozen: 0, moneyReward: stats.reward, expReward: stats.expReward, color: stats.color, radius: stats.radius,
+                // Init Animation
+                frameX: 0, maxFrame: 6, gameFrame: 0, spriteLoaded: !!orcSpriteRef.current
               });
             }
           } else queue[0].delay--;
@@ -447,6 +476,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
         for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
           const enemy = enemiesRef.current[i];
+          
+          // Animate Sprite
+          enemy.gameFrame++;
+          if (enemy.gameFrame % 5 === 0) {
+              if (enemy.frameX < enemy.maxFrame) enemy.frameX++;
+              else enemy.frameX = 0;
+          }
+
           const target = currentMap.waypoints[enemy.pathIndex + 1]; 
           if (!target) {
             state.lives--; 
@@ -533,7 +570,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     }
     // Pass slingerSpriteRef to drawTower
     towersRef.current.forEach(tower => { ctx.save(); ctx.translate(tower.position.x, tower.position.y); drawTower(ctx, tower, gameStateRef.current.era, gameStateRef.current.gameTime, slingerSpriteRef.current); ctx.restore(); });
-    enemiesRef.current.forEach(enemy => { ctx.save(); ctx.translate(enemy.position.x, enemy.position.y); drawEnemySprite(ctx, enemy, gameStateRef.current.era, gameStateRef.current.gameTime); ctx.restore(); });
+    enemiesRef.current.forEach(enemy => { ctx.save(); ctx.translate(enemy.position.x, enemy.position.y); drawEnemySprite(ctx, enemy, gameStateRef.current.era, gameStateRef.current.gameTime, orcSpriteRef.current); ctx.restore(); });
     projectilesRef.current.forEach(proj => drawProjectile(ctx, proj, gameStateRef.current.era));
     floatingTextsRef.current.forEach(ft => { ctx.fillStyle = ft.color; ctx.font = 'bold 16px Arial'; ctx.fillText(ft.text, ft.position.x, ft.position.y); });
 
@@ -543,14 +580,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         const gx = Math.floor(mousePosRef.current.x / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const gy = Math.floor(mousePosRef.current.y / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
         const config = TOWER_TYPES[selectedTowerType];
+        
+        // Grid highlight like standard TD
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; 
+        ctx.fillRect(gx - GRID_SIZE/2, gy - GRID_SIZE/2, GRID_SIZE, GRID_SIZE);
+
         ctx.beginPath(); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.arc(gx, gy, config.range, 0, Math.PI * 2); ctx.fill();
         const isValid = gameStateRef.current.money >= config.cost && !isPointOnPath(gx, gy, 35, currentMap.waypoints) && !towersRef.current.some(t => distance(t.position, {x: gx, y: gy}) < 20);
+        
         ctx.save(); ctx.translate(gx, gy); ctx.globalAlpha = 0.8;
-        // Mock tower for preview
         const mock: Tower = { id:'p', position:{x:gx, y:gy}, type:selectedTowerType, level:1, lastShotFrame:0, range:0, damage:0, cooldown:0, rotation:0, eraBuilt:0};
         drawTower(ctx, mock, gameStateRef.current.era, 0, slingerSpriteRef.current); 
         ctx.restore();
-        ctx.fillStyle = isValid ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'; ctx.beginPath(); ctx.arc(gx, gy, 20, 0, Math.PI * 2); ctx.fill();
+        
+        // Color indicator
+        ctx.fillStyle = isValid ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'; 
+        ctx.fillRect(gx - GRID_SIZE/2, gy - GRID_SIZE/2, GRID_SIZE, GRID_SIZE);
     }
     ctx.restore();
   }, [currentMap, selectedTowerType, canvasDimensions]);

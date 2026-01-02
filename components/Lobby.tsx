@@ -76,8 +76,9 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                         <Users size={20} /> JOIN ROOM
                     </button>
                     
-                    <div className="text-[10px] text-center text-slate-600 mt-2 font-mono">
-                        Server: 157.180.29.14 (Live)
+                    <div className="text-[10px] text-center text-green-400 mt-2 font-mono flex items-center justify-center gap-1">
+                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                         Server: Cloudflare Secure (Live)
                     </div>
                 </div>
             )}
