@@ -218,6 +218,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   const [isSpectating, setIsSpectating] = useState(false);
   const [opponentState, setOpponentState] = useState<OpponentState | null>(null);
 
+  // INTERPOLATION for smooth spectating
+  const prevOpponentStateRef = useRef<OpponentState | null>(null);
+  const opponentStateTimeRef = useRef<number>(0);
+  const interpolatedOpponentRef = useRef<OpponentState | null>(null);
+
   // GAME STATE REFS
   const gameStateRef = useRef<GameState>({
     ...INITIAL_STATE,
@@ -340,8 +345,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       setUiState({ ...gameStateRef.current });
     });
 
-    // Receive opponent state for spectator mode
+    // Receive opponent state for spectator mode - with interpolation tracking
     socketService.onOpponentState((state) => {
+      // Store previous state for interpolation
+      prevOpponentStateRef.current = opponentState;
+      opponentStateTimeRef.current = performance.now();
       setOpponentState(state);
     });
 
@@ -643,9 +651,97 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       return { scale, offsetX: (width - CANVAS_WIDTH * scale) / 2, offsetY: (height - CANVAS_HEIGHT * scale) / 2 };
   };
 
+  // Interpolate opponent state for smooth rendering
+  const getInterpolatedOpponentState = useCallback((): OpponentState | null => {
+    if (!opponentState) return null;
+    if (!prevOpponentStateRef.current) return opponentState;
+
+    const now = performance.now();
+    const elapsed = now - opponentStateTimeRef.current;
+    const interpolationTime = 50; // ms - time between expected updates (3 frames at 60fps ≈ 50ms)
+
+    // Clamp t between 0 and 1, with extrapolation up to 1.5 for prediction
+    const t = Math.min(elapsed / interpolationTime, 1.5);
+
+    const prev = prevOpponentStateRef.current;
+    const curr = opponentState;
+
+    // Interpolate enemy positions
+    const interpolatedEnemies = curr.enemies.map((enemy, i) => {
+      const prevEnemy = prev.enemies.find(e =>
+        // Match by approximate position (same enemy)
+        Math.abs(e.position.x - enemy.position.x) < 100 &&
+        Math.abs(e.position.y - enemy.position.y) < 100 &&
+        e.type === enemy.type
+      ) || prev.enemies[i];
+
+      if (prevEnemy) {
+        return {
+          ...enemy,
+          position: {
+            x: prevEnemy.position.x + (enemy.position.x - prevEnemy.position.x) * t,
+            y: prevEnemy.position.y + (enemy.position.y - prevEnemy.position.y) * t
+          }
+        };
+      }
+      return enemy;
+    });
+
+    // Interpolate projectile positions
+    const interpolatedProjectiles = curr.projectiles.map((proj, i) => {
+      const prevProj = prev.projectiles[i];
+      if (prevProj) {
+        return {
+          ...proj,
+          position: {
+            x: prevProj.position.x + (proj.position.x - prevProj.position.x) * t,
+            y: prevProj.position.y + (proj.position.y - prevProj.position.y) * t
+          }
+        };
+      }
+      // For new projectiles, use velocity to extrapolate
+      return {
+        ...proj,
+        position: {
+          x: proj.position.x + proj.velocity.x * (t - 1) * 0.5,
+          y: proj.position.y + proj.velocity.y * (t - 1) * 0.5
+        }
+      };
+    });
+
+    // Interpolate tower rotations
+    const interpolatedTowers = curr.towers.map((tower, i) => {
+      const prevTower = prev.towers.find(t =>
+        Math.abs(t.position.x - tower.position.x) < 5 &&
+        Math.abs(t.position.y - tower.position.y) < 5
+      );
+      if (prevTower) {
+        // Interpolate rotation smoothly
+        let rotDiff = tower.rotation - prevTower.rotation;
+        // Handle rotation wrap-around
+        if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+        if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+        return {
+          ...tower,
+          rotation: prevTower.rotation + rotDiff * Math.min(t, 1)
+        };
+      }
+      return tower;
+    });
+
+    return {
+      ...curr,
+      enemies: interpolatedEnemies,
+      projectiles: interpolatedProjectiles,
+      towers: interpolatedTowers
+    };
+  }, [opponentState]);
+
   // Draw opponent's game (for spectator mode) - uses same sprites as own game
   const drawOpponentGame = (ctx: CanvasRenderingContext2D, scale: number, offsetX: number, offsetY: number) => {
-    if (!opponentState) return;
+    // Use interpolated state for smooth rendering
+    const displayState = getInterpolatedOpponentState();
+    if (!displayState) return;
 
     ctx.save();
     ctx.translate(offsetX, offsetY);
@@ -680,10 +776,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     }
 
     // Opponent's towers - use proper drawing function with rotation
-    const opponentEra = opponentState.era;
+    const opponentEra = displayState.era;
     const gameTime = gameStateRef.current.gameTime;
 
-    opponentState.towers.forEach(tower => {
+    displayState.towers.forEach(tower => {
         ctx.save();
         ctx.translate(tower.position.x, tower.position.y);
         // Create a mock tower object for drawing
@@ -704,7 +800,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     });
 
     // Opponent's enemies - use proper drawing function
-    opponentState.enemies.forEach(enemy => {
+    displayState.enemies.forEach(enemy => {
         ctx.save();
         ctx.translate(enemy.position.x, enemy.position.y);
         // Create a mock enemy object for drawing
@@ -729,8 +825,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     });
 
     // Opponent's projectiles
-    if (opponentState.projectiles) {
-        opponentState.projectiles.forEach(proj => {
+    if (displayState.projectiles) {
+        displayState.projectiles.forEach(proj => {
             ctx.save();
             ctx.translate(proj.position.x, proj.position.y);
             ctx.rotate(Math.atan2(proj.velocity.y, proj.velocity.x));
