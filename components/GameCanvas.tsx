@@ -290,17 +290,30 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     if (!onlineGameId || initialMode !== 'PVP_ONLINE') return;
 
     // Game starts when both players are ready
-    socketService.onGameStart(({ waveData }) => {
-      console.log('Game starting with synced wave:', waveData);
+    const startGameWithWave = (waveData?: WaveData) => {
       setWaitingForOpponent(false);
       gameStateRef.current.isPlaying = true;
-      gameStateRef.current.wave = waveData.wave;
-      spawnQueueRef.current = [...waveData.enemies];
+      if (waveData) {
+        gameStateRef.current.wave = waveData.wave;
+        spawnQueueRef.current = [...waveData.enemies];
+      } else {
+        spawnQueueRef.current = generateWaveEnemies(1);
+      }
       waveFinishedRef.current = false;
       audioService.playWaveStart(gameStateRef.current.era);
-      setNotification({ title: "WAVE " + waveData.wave, subtitle: "ENEMIES INCOMING!", color: "text-yellow-400" });
+      setNotification({ title: "WAVE 1", subtitle: "ENEMIES INCOMING!", color: "text-yellow-400" });
       setTimeout(() => setNotification(null), 2000);
       setUiState({ ...gameStateRef.current });
+    };
+
+    socketService.onGameStart(({ waveData }) => {
+      console.log('Game starting with synced wave:', waveData);
+      startGameWithWave(waveData);
+    });
+
+    socketService.onOpponentJoined(() => {
+      console.log('Opponent joined, starting game');
+      startGameWithWave();
     });
 
     // Receive next wave sync

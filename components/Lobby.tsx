@@ -131,7 +131,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
         const response = await socketService.joinGame(roomId);
 
         if (response.status === 'ok') {
-            await supabase
+            const { error } = await supabase
               .from('game_rooms')
               .update({
                 player_count: 2,
@@ -139,6 +139,10 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
                 updated_at: new Date().toISOString()
               })
               .eq('id', roomId);
+
+            if (!error) {
+                setStatus('WAITING');
+            }
         } else {
             setErrorMessage(response.message || "Failed to join room.");
             setStatus('ERROR');
