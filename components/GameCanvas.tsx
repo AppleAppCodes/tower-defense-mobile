@@ -11,6 +11,7 @@ interface GameCanvasProps {
   initialMode?: GameMode;
   onlineGameId?: string;
   onlinePlayerNumber?: 1 | 2;
+  initialWaveData?: WaveData;
 }
 
 // --- CONSTANTS ---
@@ -200,7 +201,7 @@ const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
 };
 
 // --- GAME COMPONENT ---
-const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFENSE', onlineGameId, onlinePlayerNumber }) => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFENSE', onlineGameId, onlinePlayerNumber, initialWaveData }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mousePosRef = useRef<Vector2D | null>(null);
@@ -395,12 +396,43 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       setUiState({...gameStateRef.current});
       triggerHaptic('medium');
 
-      // For PVP Online, signal ready to server
-      if (initialMode === 'PVP_ONLINE' && onlineGameId) {
-        setWaitingForOpponent(true);
-        socketService.playerReady(onlineGameId);
-      }
+      // PVP_ONLINE: Don't send ready here - Lobby already did that!
+      // The game_start event from server will trigger the first wave
   }, [initialMode, onlineGameId]);
+
+  // Auto-start for PVP_ONLINE (no START button needed, Lobby already handled ready)
+  useEffect(() => {
+    if (initialMode === 'PVP_ONLINE' && onlineGameId && !hasStartedGame) {
+      // Initialize the game immediately for online matches
+      setHasStartedGame(true);
+      gameStateRef.current = {
+          ...INITIAL_STATE,
+          mode: initialMode,
+          lives: 20,
+          money: 600,
+          wave: initialWaveData?.wave || 1,
+          gameTime: 0,
+          era: 0,
+          exp: 0,
+          maxExp: ERA_DATA[0].maxExp,
+          autoStartTimer: -1, // No auto-start timer for online
+          isPlaying: true, // Start playing immediately with wave data from Lobby
+          isGameOver: false,
+          gameSpeed: 1
+      };
+
+      // Use the wave data from Lobby (passed via game_start event)
+      if (initialWaveData?.enemies) {
+        spawnQueueRef.current = [...initialWaveData.enemies];
+        waveFinishedRef.current = false;
+        audioService.playWaveStart(0);
+        setNotification({ title: "WAVE " + (initialWaveData.wave || 1), subtitle: "LOS GEHT'S!", color: "text-yellow-400" });
+        setTimeout(() => setNotification(null), 2000);
+      }
+
+      setUiState({...gameStateRef.current});
+    }
+  }, [initialMode, onlineGameId, hasStartedGame, initialWaveData]);
 
 
   // --- START WAVE (Solo mode only) ---

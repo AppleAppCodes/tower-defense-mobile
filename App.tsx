@@ -15,6 +15,7 @@ const App: React.FC = () => {
   // Online State
   const [onlineGameId, setOnlineGameId] = useState<string | undefined>(undefined);
   const [onlinePlayerNumber, setOnlinePlayerNumber] = useState<1 | 2 | undefined>(undefined);
+  const [initialWaveData, setInitialWaveData] = useState<any>(undefined);
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -54,9 +55,10 @@ const App: React.FC = () => {
       setView('LOBBY');
   };
 
-  const handleMatchFound = (playerNumber: 1 | 2, gameId: string) => {
+  const handleMatchFound = (playerNumber: 1 | 2, gameId: string, waveData?: any) => {
       setOnlinePlayerNumber(playerNumber);
       setOnlineGameId(gameId);
+      setInitialWaveData(waveData);
       setGameMode('PVP_ONLINE');
       setView('GAME');
   };
@@ -66,6 +68,7 @@ const App: React.FC = () => {
       setView('MENU');
       setOnlineGameId(undefined);
       setOnlinePlayerNumber(undefined);
+      setInitialWaveData(undefined);
   };
 
   return (
@@ -81,6 +84,7 @@ const App: React.FC = () => {
                 initialMode={gameMode}
                 onlineGameId={onlineGameId}
                 onlinePlayerNumber={onlinePlayerNumber}
+                initialWaveData={initialWaveData}
             />
              <button 
                 onClick={handleBackToMenu}
