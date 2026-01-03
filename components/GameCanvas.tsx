@@ -4,7 +4,7 @@ import { Vector2D, Tower, Enemy, Projectile, GameState, TowerType, EnemyType, Ma
 import { CANVAS_WIDTH, CANVAS_HEIGHT, MAPS, TOWER_TYPES, ENEMY_STATS, GRID_SIZE, INITIAL_STATE, THEMES, ERA_DATA } from '../constants';
 import { audioService } from '../services/audioService';
 import { socketService } from '../services/socketService';
-import { Heart, Coins, Play, Check, ArrowUpCircle, Wifi, PlayCircle, Clock, Home, Zap, FastForward, Users, Eye, ChevronRight, Trophy } from 'lucide-react';
+import { Heart, Coins, Play, Check, ArrowUpCircle, Wifi, PlayCircle, Clock, Home, Zap, FastForward, Users, Eye, Trophy } from 'lucide-react';
 
 interface GameCanvasProps {
   onGameOver: (wave: number) => void;
@@ -627,7 +627,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       return { scale, offsetX: (width - CANVAS_WIDTH * scale) / 2, offsetY: (height - CANVAS_HEIGHT * scale) / 2 };
   };
 
-  // Draw opponent's game (for spectator mode)
+  // Draw opponent's game (for spectator mode) - uses same sprites as own game
   const drawOpponentGame = (ctx: CanvasRenderingContext2D, scale: number, offsetX: number, offsetY: number) => {
     if (!opponentState) return;
 
@@ -635,68 +635,82 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
-    // Semi-transparent overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-    // Background
+    // Background (same as own game)
     if (bgPatternRef.current) {
-        ctx.globalAlpha = 0.7;
         ctx.fillStyle = bgPatternRef.current;
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        ctx.globalAlpha = 1;
     }
 
-    // Path
+    // Scenery (same decorations)
+    sceneryRef.current.forEach(item => {
+        ctx.fillStyle = item.type === 'tree' ? '#14532d' : '#57534e';
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Path (same style)
     if (currentMap.waypoints.length > 0) {
-        ctx.strokeStyle = THEMES[0].pathInner; ctx.lineWidth = 60; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.beginPath(); ctx.moveTo(currentMap.waypoints[0].x, currentMap.waypoints[0].y);
-        for (let i = 1; i < currentMap.waypoints.length; i++) ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
+        ctx.strokeStyle = THEMES[0].pathInner;
+        ctx.lineWidth = 60;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(currentMap.waypoints[0].x, currentMap.waypoints[0].y);
+        for (let i = 1; i < currentMap.waypoints.length; i++) {
+            ctx.lineTo(currentMap.waypoints[i].x, currentMap.waypoints[i].y);
+        }
         ctx.stroke();
     }
 
-    // Opponent's towers (simplified)
+    // Opponent's towers - use proper drawing function
+    const opponentEra = opponentState.era;
+    const gameTime = gameStateRef.current.gameTime;
+
     opponentState.towers.forEach(tower => {
         ctx.save();
         ctx.translate(tower.position.x, tower.position.y);
-        ctx.fillStyle = '#64748b';
-        ctx.beginPath();
-        ctx.arc(0, 0, 15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        // Create a mock tower object for drawing
+        const mockTower: Tower = {
+            id: 'opp',
+            position: tower.position,
+            type: tower.type as TowerType,
+            level: tower.level,
+            lastShotFrame: 0,
+            range: 0,
+            damage: 0,
+            cooldown: 0,
+            rotation: 0,
+            eraBuilt: opponentEra
+        };
+        drawTower(ctx, mockTower, opponentEra, gameTime);
         ctx.restore();
     });
 
-    // Opponent's enemies (simplified)
+    // Opponent's enemies - use proper drawing function
     opponentState.enemies.forEach(enemy => {
         ctx.save();
         ctx.translate(enemy.position.x, enemy.position.y);
-        ctx.fillStyle = ENEMY_STATS[enemy.type as EnemyType]?.color || '#ef4444';
-        ctx.beginPath();
-        ctx.arc(0, 0, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        // HP bar
-        const hpPct = enemy.hp / enemy.maxHp;
-        ctx.fillStyle = '#111';
-        ctx.fillRect(-10, -20, 20, 4);
-        ctx.fillStyle = hpPct < 0.3 ? '#ef4444' : '#22c55e';
-        ctx.fillRect(-9, -19, 18 * hpPct, 2);
+        // Create a mock enemy object for drawing
+        const stats = ENEMY_STATS[enemy.type as EnemyType];
+        const mockEnemy: Enemy = {
+            id: 'opp',
+            position: enemy.position,
+            type: enemy.type as EnemyType,
+            hp: enemy.hp,
+            maxHp: enemy.maxHp,
+            speed: stats?.speed || 1,
+            pathIndex: 0,
+            distanceTraveled: 0,
+            frozen: 0,
+            moneyReward: 0,
+            expReward: 0,
+            color: stats?.color || '#ef4444',
+            radius: stats?.radius || 12
+        };
+        drawEnemySprite(ctx, mockEnemy, opponentEra, gameTime);
         ctx.restore();
     });
-
-    // Opponent info overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(10, 10, 150, 60);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('OPPONENT', 20, 30);
-    ctx.fillStyle = '#ef4444';
-    ctx.fillText(`❤️ ${opponentState.lives}`, 20, 50);
-    ctx.fillStyle = '#fbbf24';
-    ctx.fillText(`Wave ${opponentState.wave}`, 80, 50);
 
     ctx.restore();
   };
@@ -712,6 +726,40 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     if (isSpectating && opponentState) {
         // Draw opponent's game when spectating
         drawOpponentGame(ctx, scale, offsetX, offsetY);
+
+        // Draw "SPECTATING OPPONENT" overlay at top
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale, scale);
+
+        // Top banner
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.9)'; // Purple
+        ctx.fillRect(0, 0, CANVAS_WIDTH, 50);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('👁️ GEGNER BEOBACHTEN', CANVAS_WIDTH / 2, 25);
+
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fillText('← Swipe links um zurück zu kommen', CANVAS_WIDTH / 2, 42);
+
+        // Opponent stats
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, 60, 120, 50);
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(10, 60, 120, 50);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 14px Arial';
+        ctx.fillText(`❤️ ${opponentState.lives}`, 20, 82);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(`⚔️ Wave ${opponentState.wave}`, 20, 100);
+
+        ctx.restore();
     } else {
         // Draw own game
         ctx.save(); ctx.translate(offsetX, offsetY); ctx.scale(scale, scale);
@@ -778,13 +826,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         const dx = e.clientX - swipeStartRef.current.x;
         const threshold = 100; // pixels
 
-        if (dx < -threshold && !isSpectating) {
-            // Swipe left - return to own game
+        if (dx < -threshold && isSpectating) {
+            // Swipe left while spectating - return to own game
             setIsSpectating(false);
             swipeStartRef.current = null;
             triggerHaptic('light');
         } else if (dx > threshold && !isSpectating && opponentState) {
-            // Swipe right - view opponent
+            // Swipe right while on own game - view opponent
             setIsSpectating(true);
             swipeStartRef.current = null;
             triggerHaptic('light');
@@ -898,12 +946,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                             </div>
                         )}
 
-                        {/* Spectator indicator */}
-                        {isSpectating && (
-                            <div className="flex items-center gap-1 bg-purple-950/80 border-purple-500/30 px-2 py-1 rounded-lg border">
-                                <Eye size={12} className="text-purple-400" />
-                                <span className="text-purple-100 text-xs">SPECTATING</span>
-                            </div>
+                        {/* Spectator toggle button */}
+                        {initialMode === 'PVP_ONLINE' && opponentState && (
+                            <button
+                                onClick={() => setIsSpectating(!isSpectating)}
+                                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border transition-all pointer-events-auto active:scale-95 ${
+                                    isSpectating
+                                        ? 'bg-purple-600 border-purple-400 text-white'
+                                        : 'bg-purple-950/80 border-purple-500/30 text-purple-100'
+                                }`}
+                            >
+                                <Eye size={14} className={isSpectating ? 'text-white' : 'text-purple-400'} />
+                                <span className="text-xs font-bold">{isSpectating ? '← ZURÜCK' : 'GEGNER →'}</span>
+                            </button>
                         )}
                     </div>
 
@@ -921,14 +976,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                         )}
                     </div>
                 </div>
-
-                {/* Swipe hint for PVP */}
-                {initialMode === 'PVP_ONLINE' && opponentState && !isSpectating && (
-                    <div className="absolute top-14 right-2 flex items-center gap-1 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-lg pointer-events-none">
-                        <ChevronRight size={12} className="text-white/50" />
-                        <span className="text-white/50 text-xs">Swipe to spectate</span>
-                    </div>
-                )}
 
                 {/* Opponent lives indicator */}
                 {initialMode === 'PVP_ONLINE' && opponentState && !isSpectating && (
