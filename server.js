@@ -55,8 +55,75 @@ function generateWaveEnemies(wave) {
 // Room structure: { player1: socketId, player2: socketId, wave: number, gameStarted: boolean }
 const rooms = {};
 
+// Matchmaking queue - players waiting for a match
+const waitingQueue = [];
+
 io.on("connection", (socket) => {
   console.log("Player connected:", socket.id);
+
+  // Server-side matchmaking - find or wait for opponent
+  socket.on("find_match", (callback) => {
+    console.log(`Player ${socket.id} looking for match. Queue size: ${waitingQueue.length}`);
+
+    // Remove this player from queue if already there (reconnect case)
+    const existingIndex = waitingQueue.findIndex(p => p.id === socket.id);
+    if (existingIndex !== -1) {
+      waitingQueue.splice(existingIndex, 1);
+    }
+
+    if (waitingQueue.length > 0) {
+      // Found someone waiting! Create a match
+      const opponent = waitingQueue.shift();
+      const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      console.log(`Matching ${socket.id} with ${opponent.id} in room ${roomId}`);
+
+      // Create room
+      rooms[roomId] = {
+        player1: opponent.id,
+        player2: socket.id,
+        wave: 1,
+        gameStarted: false,
+        readyPlayers: new Set()
+      };
+
+      // Join both to socket room
+      opponent.socket.join(roomId);
+      socket.join(roomId);
+
+      // Notify player 1 (the one who was waiting)
+      opponent.socket.emit("match_found", { role: "PLAYER", gameId: roomId, playerNumber: 1 });
+      opponent.socket.emit("opponent_joined");
+
+      // Notify player 2 (current player)
+      socket.emit("match_found", { role: "PLAYER", gameId: roomId, playerNumber: 2 });
+
+      if (typeof callback === 'function') {
+        callback({ status: 'matched', roomId, playerNumber: 2 });
+      }
+      if (typeof opponent.callback === 'function') {
+        opponent.callback({ status: 'matched', roomId, playerNumber: 1 });
+      }
+
+    } else {
+      // No one waiting, add to queue
+      waitingQueue.push({ id: socket.id, socket, callback });
+      console.log(`Player ${socket.id} added to queue. Queue size: ${waitingQueue.length}`);
+
+      if (typeof callback === 'function') {
+        callback({ status: 'waiting' });
+      }
+    }
+  });
+
+  // Cancel matchmaking
+  socket.on("cancel_match", () => {
+    const index = waitingQueue.findIndex(p => p.id === socket.id);
+    if (index !== -1) {
+      waitingQueue.splice(index, 1);
+      console.log(`Player ${socket.id} left queue. Queue size: ${waitingQueue.length}`);
+    }
+  });
 
   socket.on("join_game", async (roomId, callback) => {
     console.log(`Socket ${socket.id} requesting join room ${roomId}`);
@@ -196,6 +263,13 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", (reason) => {
     console.log(`Player disconnected: ${socket.id} Reason: ${reason}`);
+
+    // Remove from matchmaking queue if waiting
+    const queueIndex = waitingQueue.findIndex(p => p.id === socket.id);
+    if (queueIndex !== -1) {
+      waitingQueue.splice(queueIndex, 1);
+      console.log(`Removed ${socket.id} from queue on disconnect. Queue size: ${waitingQueue.length}`);
+    }
 
     // Find and clean up any rooms this player was in
     for (const [roomId, room] of Object.entries(rooms)) {

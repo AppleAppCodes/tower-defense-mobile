@@ -64,6 +64,31 @@ class SocketService {
     });
   }
 
+  // Server-side matchmaking - find or wait for opponent
+  findMatch(): Promise<{ status: string; roomId?: string; playerNumber?: number; message?: string }> {
+    return new Promise((resolve) => {
+      if (!this.socket) this.connect();
+
+      // 30 second timeout for matchmaking
+      const timeout = setTimeout(() => {
+        resolve({ status: 'error', message: 'Matchmaking timed out' });
+      }, 30000);
+
+      console.log('Emitting find_match to server');
+
+      this.socket?.emit('find_match', (response: any) => {
+        clearTimeout(timeout);
+        console.log('Find match response:', response);
+        resolve(response);
+      });
+    });
+  }
+
+  // Cancel matchmaking
+  cancelMatch() {
+    this.socket?.emit('cancel_match');
+  }
+
   // Signal that player is ready to start
   playerReady(gameId: string) {
     this.socket?.emit('player_ready', gameId);
