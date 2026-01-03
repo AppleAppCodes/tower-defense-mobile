@@ -120,7 +120,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
 
   }, [roomState, onMatchFound]);
 
-  // Quick Match - Find or create a room
+  // Quick Match - Server-side matchmaking (no Supabase needed!)
   const handleQuickMatch = useCallback(async () => {
     if (!isConnected) {
       setErrorMessage("Verbindung wird hergestellt...");
@@ -130,93 +130,30 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
 
     setStatus('SEARCHING');
     setErrorMessage('');
-    setSearchingStatus('Suche Räume...');
+    setSearchingStatus('Verbinde mit Server...');
 
     try {
-      // First, clean up stale rooms (older than 5 minutes)
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      await supabase
-        .from('game_rooms')
-        .delete()
-        .eq('status', 'WAITING')
-        .lt('created_at', fiveMinutesAgo);
+      // Use server-side matchmaking
+      setSearchingStatus('Suche Gegner...');
+      console.log('Starting server-side matchmaking...');
 
-      // Try to find an open room
-      setSearchingStatus('Suche offene Räume...');
-      const { data: openRooms, error: queryError } = await supabase
-        .from('game_rooms')
-        .select('*')
-        .eq('status', 'WAITING')
-        .order('created_at', { ascending: true })
-        .limit(1);
+      const response = await socketService.findMatch();
+      console.log('Matchmaking response:', response);
 
-      console.log('Open rooms query result:', openRooms, 'error:', queryError);
-
-      let roomId: string;
-      let isHost = false;
-
-      if (openRooms && openRooms.length > 0) {
-        // Join existing room - immediately mark it to prevent race condition
-        roomId = openRooms[0].id;
-        setSearchingRoomId(roomId);
-        setSearchingStatus(`Trete Raum ${roomId} bei...`);
-        console.log('Joining existing room:', roomId);
-
-        // Try to claim the room by updating status
-        const { error: claimError } = await supabase
-          .from('game_rooms')
-          .update({ status: 'JOINING', player_count: 2 })
-          .eq('id', roomId)
-          .eq('status', 'WAITING'); // Only if still WAITING
-
-        if (claimError) {
-          console.log('Failed to claim room, creating new one');
-          // Room was claimed by someone else, create our own
-          isHost = true;
-          roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      if (response.status === 'waiting') {
+        // We're in the queue, waiting for opponent
+        setSearchingStatus('In Warteschlange...');
+        setSearchingRoomId('Warte auf Gegner');
+        // The match_found event will be emitted when opponent joins
+      } else if (response.status === 'matched') {
+        // Already matched! The match_found event should have been emitted
+        setSearchingStatus('Match gefunden!');
+        if (response.roomId) {
+          setSearchingRoomId(response.roomId);
         }
-      } else {
-        // Create new room
-        roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        isHost = true;
+      } else if (response.status === 'error') {
+        throw new Error(response.message || 'Matchmaking failed');
       }
-
-      if (isHost) {
-        setSearchingRoomId(roomId);
-        setSearchingStatus(`Erstelle Raum ${roomId}...`);
-
-        const { error: insertError } = await supabase
-          .from('game_rooms')
-          .insert({
-            id: roomId,
-            host_name: `Player${Math.floor(Math.random() * 9999)}`,
-            status: 'WAITING',
-            player_count: 1,
-            max_players: 2
-          });
-
-        if (insertError) {
-          console.error('Insert error:', insertError);
-          throw insertError;
-        }
-        console.log('Created new room:', roomId);
-      }
-
-      // Join the room via socket (listener is already set up in useEffect)
-      setSearchingStatus(`Verbinde mit ${roomId}...`);
-      console.log('Joining room via socket:', roomId);
-      const response = await socketService.joinGame(roomId);
-      console.log('Socket join response:', response);
-
-      if (response.status !== 'ok') {
-        // If join failed, clean up and show error
-        if (isHost) {
-          await supabase.from('game_rooms').delete().eq('id', roomId);
-        }
-        throw new Error(response.message || 'Failed to join room');
-      }
-
-      setSearchingStatus(`Warte in Raum ${roomId}...`);
 
     } catch (e) {
       console.error('Quick match error:', e);
@@ -225,6 +162,14 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
       setSearchingRoomId(null);
     }
   }, [isConnected]);
+
+  // Cancel matchmaking
+  const handleCancelSearch = useCallback(() => {
+    socketService.cancelMatch();
+    setStatus('IDLE');
+    setSearchingRoomId(null);
+    setSearchingStatus('');
+  }, []);
 
   // Handle Ready button
   const handleReady = useCallback(() => {
@@ -270,11 +215,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
               )}
             </div>
             <button
-              onClick={() => {
-                setStatus('IDLE');
-                setSearchingRoomId(null);
-                setSearchingStatus('');
-              }}
+              onClick={handleCancelSearch}
               className="text-red-400 text-sm hover:underline"
             >
               Abbrechen
