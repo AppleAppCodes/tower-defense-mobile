@@ -8,12 +8,22 @@ export type PvpPhase = 'P1_BUILD' | 'HANDOVER_TO_P2' | 'P2_ATTACK' | 'P2_BUILD' 
                      | 'ONLINE_WAITING' | 'ONLINE_PLAYING' | 'ONLINE_SPECTATING';
 
 // New: Opponent's visible state for spectator mode
+export interface OpponentEnemy {
+  id: string;
+  position: Vector2D;
+  type: string;
+  hp: number;
+  maxHp: number;
+  pathIndex: number;
+  speed: number;
+}
+
 export interface OpponentState {
   lives: number;
   wave: number;
   era: number;
   towers: { position: Vector2D; type: string; level: number; rotation: number }[];
-  enemies: { position: Vector2D; type: string; hp: number; maxHp: number }[];
+  enemies: OpponentEnemy[];
   projectiles: { position: Vector2D; velocity: Vector2D; visualType: string; color: string }[];
   isGameOver: boolean;
 }
