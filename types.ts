@@ -12,8 +12,9 @@ export interface OpponentState {
   lives: number;
   wave: number;
   era: number;
-  towers: { position: Vector2D; type: string; level: number }[];
+  towers: { position: Vector2D; type: string; level: number; rotation: number }[];
   enemies: { position: Vector2D; type: string; hp: number; maxHp: number }[];
+  projectiles: { position: Vector2D; velocity: Vector2D; visualType: string; color: string }[];
   isGameOver: boolean;
 }
 

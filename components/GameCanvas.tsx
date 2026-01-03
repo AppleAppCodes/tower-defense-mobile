@@ -16,7 +16,7 @@ interface GameCanvasProps {
 
 // --- CONSTANTS ---
 const BUILD_PHASE_DURATION = 600; // 10 Seconds (60fps)
-const STATE_SYNC_INTERVAL = 10; // Send state every 10 frames
+const STATE_SYNC_INTERVAL = 3; // Send state every 3 frames for smooth spectating
 
 // --- HELPER FUNCTIONS ---
 const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[]) => {
@@ -461,8 +461,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       lives: state.lives,
       wave: state.wave,
       era: state.era,
-      towers: towersRef.current.map(t => ({ position: t.position, type: t.type, level: t.level })),
-      enemies: enemiesRef.current.map(e => ({ position: e.position, type: e.type, hp: e.hp, maxHp: e.maxHp })),
+      towers: towersRef.current.map(t => ({
+        position: t.position,
+        type: t.type,
+        level: t.level,
+        rotation: t.rotation
+      })),
+      enemies: enemiesRef.current.map(e => ({
+        position: e.position,
+        type: e.type,
+        hp: e.hp,
+        maxHp: e.maxHp
+      })),
+      projectiles: projectilesRef.current.map(p => ({
+        position: p.position,
+        velocity: p.velocity,
+        visualType: p.visualType,
+        color: p.color
+      })),
       isGameOver: state.isGameOver
     };
 
@@ -663,7 +679,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         ctx.stroke();
     }
 
-    // Opponent's towers - use proper drawing function
+    // Opponent's towers - use proper drawing function with rotation
     const opponentEra = opponentState.era;
     const gameTime = gameStateRef.current.gameTime;
 
@@ -680,7 +696,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
             range: 0,
             damage: 0,
             cooldown: 0,
-            rotation: 0,
+            rotation: tower.rotation || 0,
             eraBuilt: opponentEra
         };
         drawTower(ctx, mockTower, opponentEra, gameTime);
@@ -711,6 +727,44 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         drawEnemySprite(ctx, mockEnemy, opponentEra, gameTime);
         ctx.restore();
     });
+
+    // Opponent's projectiles
+    if (opponentState.projectiles) {
+        opponentState.projectiles.forEach(proj => {
+            ctx.save();
+            ctx.translate(proj.position.x, proj.position.y);
+            ctx.rotate(Math.atan2(proj.velocity.y, proj.velocity.x));
+
+            if (proj.visualType === 'ROCK') {
+                ctx.fillStyle = '#a8a29e';
+                ctx.beginPath();
+                ctx.moveTo(3, 0);
+                ctx.lineTo(-2, 3);
+                ctx.lineTo(-3, -1);
+                ctx.lineTo(0, -3);
+                ctx.fill();
+            } else if (proj.visualType === 'ARROW') {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-6, 0);
+                ctx.lineTo(6, 0);
+                ctx.stroke();
+                ctx.fillStyle = '#94a3b8';
+                ctx.beginPath();
+                ctx.moveTo(6, 0);
+                ctx.lineTo(2, -2);
+                ctx.lineTo(2, 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = proj.color || '#fff';
+                ctx.beginPath();
+                ctx.arc(0, 0, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        });
+    }
 
     ctx.restore();
   };
