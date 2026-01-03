@@ -6,7 +6,7 @@ import { supabase, GameRoom } from '../services/supabaseClient';
 
 interface LobbyProps {
   onBack: () => void;
-  onMatchFound: (playerNumber: 1 | 2, gameId: string) => void;
+  onMatchFound: (playerNumber: 1 | 2, gameId: string, initialWaveData?: any) => void;
 }
 
 type LobbyStatus = 'IDLE' | 'SEARCHING' | 'IN_ROOM' | 'ERROR';
@@ -66,11 +66,11 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
       setRoomState(prev => prev ? { ...prev, opponentJoined: true } : null);
     });
 
-    // Game starts (both ready)
-    socketService.onGameStart(() => {
-      console.log('Game starting!');
+    // Game starts (both ready) - pass waveData to GameCanvas
+    socketService.onGameStart((data) => {
+      console.log('Game starting with wave data:', data);
       if (roomState) {
-        onMatchFound(roomState.playerNumber, roomState.roomId);
+        onMatchFound(roomState.playerNumber, roomState.roomId, data.waveData);
       }
     });
 
