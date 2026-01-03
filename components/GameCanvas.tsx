@@ -216,12 +216,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   // SWIPE STATE FOR SPECTATOR MODE
   const swipeStartRef = useRef<{ x: number; time: number } | null>(null);
   const [isSpectating, setIsSpectating] = useState(false);
-  const [opponentState, setOpponentState] = useState<OpponentState | null>(null);
 
-  // INTERPOLATION for smooth spectating
+  // OPPONENT STATE - Use refs for smooth 60fps rendering (React state is too slow)
+  const opponentStateRef = useRef<OpponentState | null>(null);
   const prevOpponentStateRef = useRef<OpponentState | null>(null);
   const opponentStateTimeRef = useRef<number>(0);
-  const interpolatedOpponentRef = useRef<OpponentState | null>(null);
+  const opponentUpdateCountRef = useRef<number>(0);
+
+  // Keep React state just for UI elements (lives display, etc)
+  const [opponentState, setOpponentState] = useState<OpponentState | null>(null);
 
   // GAME STATE REFS
   const gameStateRef = useRef<GameState>({
@@ -345,12 +348,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       setUiState({ ...gameStateRef.current });
     });
 
-    // Receive opponent state for spectator mode - with interpolation tracking
+    // Receive opponent state for spectator mode - use REFS for instant updates
     socketService.onOpponentState((state) => {
-      // Store previous state for interpolation
-      prevOpponentStateRef.current = opponentState;
+      // Store previous state for interpolation (use ref, not React state!)
+      prevOpponentStateRef.current = opponentStateRef.current;
+      opponentStateRef.current = state;
       opponentStateTimeRef.current = performance.now();
-      setOpponentState(state);
+      opponentUpdateCountRef.current++;
+
+      // Update React state SPARINGLY - only for UI elements that changed
+      // This prevents unnecessary re-renders that cause stuttering
+      setOpponentState(prev => {
+        // Only update if lives or wave changed (UI-relevant values)
+        if (!prev || prev.lives !== state.lives || prev.wave !== state.wave || prev.isGameOver !== state.isGameOver) {
+          return state;
+        }
+        return prev; // Don't update - prevents re-render
+      });
     });
 
     // Opponent lost - we won!
@@ -651,76 +665,73 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       return { scale, offsetX: (width - CANVAS_WIDTH * scale) / 2, offsetY: (height - CANVAS_HEIGHT * scale) / 2 };
   };
 
-  // Interpolate opponent state for smooth rendering
-  const getInterpolatedOpponentState = useCallback((): OpponentState | null => {
-    if (!opponentState) return null;
-    if (!prevOpponentStateRef.current) return opponentState;
+  // Interpolate opponent state for smooth 60fps rendering using REFS (not React state)
+  const getInterpolatedOpponentState = (): OpponentState | null => {
+    const curr = opponentStateRef.current;
+    if (!curr) return null;
+
+    const prev = prevOpponentStateRef.current;
+    if (!prev) return curr;
 
     const now = performance.now();
     const elapsed = now - opponentStateTimeRef.current;
-    const interpolationTime = 50; // ms - time between expected updates (3 frames at 60fps ≈ 50ms)
+    const interpolationTime = 50; // ms between updates
 
-    // Clamp t between 0 and 1, with extrapolation up to 1.5 for prediction
-    const t = Math.min(elapsed / interpolationTime, 1.5);
+    // t goes from 0 to 1 as we approach next expected update, then extrapolates
+    const t = Math.min(elapsed / interpolationTime, 2.0);
 
-    const prev = prevOpponentStateRef.current;
-    const curr = opponentState;
-
-    // Interpolate enemy positions
-    const interpolatedEnemies = curr.enemies.map((enemy, i) => {
+    // Interpolate/extrapolate enemy positions using velocity estimation
+    const interpolatedEnemies = curr.enemies.map((enemy) => {
+      // Find matching enemy in previous state by type and proximity
       const prevEnemy = prev.enemies.find(e =>
-        // Match by approximate position (same enemy)
-        Math.abs(e.position.x - enemy.position.x) < 100 &&
-        Math.abs(e.position.y - enemy.position.y) < 100 &&
-        e.type === enemy.type
-      ) || prev.enemies[i];
+        e.type === enemy.type &&
+        Math.abs(e.position.x - enemy.position.x) < 150 &&
+        Math.abs(e.position.y - enemy.position.y) < 150
+      );
 
-      if (prevEnemy) {
+      if (prevEnemy && t > 0) {
+        // Calculate velocity from position difference
+        const vx = enemy.position.x - prevEnemy.position.x;
+        const vy = enemy.position.y - prevEnemy.position.y;
+
+        // Extrapolate position based on velocity
         return {
           ...enemy,
           position: {
-            x: prevEnemy.position.x + (enemy.position.x - prevEnemy.position.x) * t,
-            y: prevEnemy.position.y + (enemy.position.y - prevEnemy.position.y) * t
+            x: prevEnemy.position.x + vx * t,
+            y: prevEnemy.position.y + vy * t
           }
         };
       }
       return enemy;
     });
 
-    // Interpolate projectile positions
-    const interpolatedProjectiles = curr.projectiles.map((proj, i) => {
-      const prevProj = prev.projectiles[i];
-      if (prevProj) {
-        return {
-          ...proj,
-          position: {
-            x: prevProj.position.x + (proj.position.x - prevProj.position.x) * t,
-            y: prevProj.position.y + (proj.position.y - prevProj.position.y) * t
-          }
-        };
-      }
-      // For new projectiles, use velocity to extrapolate
+    // Interpolate/extrapolate projectiles using their actual velocity
+    const interpolatedProjectiles = curr.projectiles.map((proj) => {
+      // Projectiles have velocity, so we can extrapolate accurately
+      const extrapolateFrames = (elapsed / 16.67) * 0.8; // frames since last update
       return {
         ...proj,
         position: {
-          x: proj.position.x + proj.velocity.x * (t - 1) * 0.5,
-          y: proj.position.y + proj.velocity.y * (t - 1) * 0.5
+          x: proj.position.x + proj.velocity.x * extrapolateFrames,
+          y: proj.position.y + proj.velocity.y * extrapolateFrames
         }
       };
     });
 
-    // Interpolate tower rotations
-    const interpolatedTowers = curr.towers.map((tower, i) => {
+    // Interpolate tower rotations smoothly
+    const interpolatedTowers = curr.towers.map((tower) => {
       const prevTower = prev.towers.find(t =>
         Math.abs(t.position.x - tower.position.x) < 5 &&
         Math.abs(t.position.y - tower.position.y) < 5
       );
+
       if (prevTower) {
-        // Interpolate rotation smoothly
         let rotDiff = tower.rotation - prevTower.rotation;
-        // Handle rotation wrap-around
-        if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-        if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+        // Handle angle wrap-around
+        while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+        while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+
         return {
           ...tower,
           rotation: prevTower.rotation + rotDiff * Math.min(t, 1)
@@ -735,7 +746,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       projectiles: interpolatedProjectiles,
       towers: interpolatedTowers
     };
-  }, [opponentState]);
+  };
 
   // Draw opponent's game (for spectator mode) - uses same sprites as own game
   const drawOpponentGame = (ctx: CanvasRenderingContext2D, scale: number, offsetX: number, offsetY: number) => {
@@ -873,7 +884,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     // Clear canvas
     ctx.fillStyle = THEMES[0].background; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (isSpectating && opponentState) {
+    // Use REF for condition check - avoid React state dependency for smooth rendering
+    const currentOpponentState = opponentStateRef.current;
+
+    if (isSpectating && currentOpponentState) {
         // Draw opponent's game when spectating
         drawOpponentGame(ctx, scale, offsetX, offsetY);
 
@@ -895,7 +909,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.fillText('← Swipe links um zurück zu kommen', CANVAS_WIDTH / 2, 42);
 
-        // Opponent stats
+        // Opponent stats - read from REF for consistency
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(10, 60, 120, 50);
         ctx.strokeStyle = 'rgba(139, 92, 246, 0.5)';
@@ -905,9 +919,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 14px Arial';
-        ctx.fillText(`❤️ ${opponentState.lives}`, 20, 82);
+        ctx.fillText(`❤️ ${currentOpponentState.lives}`, 20, 82);
         ctx.fillStyle = '#fbbf24';
-        ctx.fillText(`⚔️ Wave ${opponentState.wave}`, 20, 100);
+        ctx.fillText(`⚔️ Wave ${currentOpponentState.wave}`, 20, 100);
 
         ctx.restore();
     } else {
@@ -949,7 +963,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         }
         ctx.restore();
     }
-  }, [currentMap, selectedTowerType, canvasDimensions, hasStartedGame, isSpectating, opponentState]);
+  }, [currentMap, selectedTowerType, canvasDimensions, hasStartedGame, isSpectating]); // opponentState removed - using refs for smooth 60fps
 
   // --- INPUT HANDLERS ---
   const getCanvasCoordinates = (clientX: number, clientY: number) => {
@@ -981,8 +995,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
             setIsSpectating(false);
             swipeStartRef.current = null;
             triggerHaptic('light');
-        } else if (dx > threshold && !isSpectating && opponentState) {
-            // Swipe right while on own game - view opponent
+        } else if (dx > threshold && !isSpectating && opponentStateRef.current) {
+            // Swipe right while on own game - view opponent (use ref for instant check)
             setIsSpectating(true);
             swipeStartRef.current = null;
             triggerHaptic('light');
@@ -1096,8 +1110,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                             </div>
                         )}
 
-                        {/* Spectator toggle button */}
-                        {initialMode === 'PVP_ONLINE' && opponentState && (
+                        {/* Spectator toggle button - always show in PVP mode once opponent data arrives */}
+                        {initialMode === 'PVP_ONLINE' && (opponentState || opponentStateRef.current) && (
                             <button
                                 onClick={() => setIsSpectating(!isSpectating)}
                                 className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border transition-all pointer-events-auto active:scale-95 ${
@@ -1127,10 +1141,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
                     </div>
                 </div>
 
-                {/* Opponent lives indicator */}
+                {/* Opponent lives indicator - read from React state (only updates when lives change) */}
                 {initialMode === 'PVP_ONLINE' && opponentState && !isSpectating && (
                     <div className="absolute top-14 left-2 flex items-center gap-2 bg-red-950/60 backdrop-blur-sm px-2 py-1 rounded-lg pointer-events-none border border-red-500/20">
-                        <span className="text-red-300 text-xs">Opponent:</span>
+                        <span className="text-red-300 text-xs">Gegner:</span>
                         <Heart size={12} className="text-red-400 fill-red-400" />
                         <span className="text-red-100 text-xs font-bold">{opponentState.lives}</span>
                     </div>
