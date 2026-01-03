@@ -50,21 +50,53 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
     fetchOnlineCount();
     const countInterval = setInterval(fetchOnlineCount, 10000);
 
-    // Setup ALL socket listeners early - they use refs to access current state
-    socketService.onOpponentJoined(() => {
-      console.log('Opponent joined!');
-      setRoomState(prev => prev ? { ...prev, opponentJoined: true } : null);
-    });
+    // Wait for socket to be ready, then setup ALL listeners
+    const setupListeners = () => {
+      if (!socketService.socket) {
+        setTimeout(setupListeners, 100);
+        return;
+      }
 
-    socketService.socket?.on('opponent_ready', () => {
-      console.log('Opponent is ready!');
-      setRoomState(prev => prev ? { ...prev, opponentReady: true } : null);
-    });
+      console.log('Setting up socket listeners...');
 
-    socketService.onOpponentDisconnected(() => {
-      console.log('Opponent disconnected!');
-      setRoomState(prev => prev ? { ...prev, opponentJoined: false, opponentReady: false } : null);
-    });
+      // CRITICAL: Setup match_found listener early!
+      socketService.onMatchFound((data) => {
+        console.log('Match found event received:', data);
+        setRoomState({
+          roomId: data.gameId,
+          playerNumber: data.playerNumber,
+          opponentJoined: data.playerNumber === 2, // If we're P2, P1 is already there
+          isReady: false,
+          opponentReady: false
+        });
+        setStatus('IN_ROOM');
+
+        // Update room in database
+        if (data.playerNumber === 2) {
+          supabase
+            .from('game_rooms')
+            .update({ player_count: 2, status: 'IN_PROGRESS' })
+            .eq('id', data.gameId);
+        }
+      });
+
+      socketService.onOpponentJoined(() => {
+        console.log('Opponent joined!');
+        setRoomState(prev => prev ? { ...prev, opponentJoined: true } : null);
+      });
+
+      socketService.socket?.on('opponent_ready', () => {
+        console.log('Opponent is ready!');
+        setRoomState(prev => prev ? { ...prev, opponentReady: true } : null);
+      });
+
+      socketService.onOpponentDisconnected(() => {
+        console.log('Opponent disconnected!');
+        setRoomState(prev => prev ? { ...prev, opponentJoined: false, opponentReady: false } : null);
+      });
+    };
+
+    setupListeners();
 
     return () => {
       clearInterval(checkConnection);
@@ -130,27 +162,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
         console.log('Created new room:', roomId);
       }
 
-      // Setup match found listener
-      socketService.onMatchFound((data) => {
-        console.log('Match found:', data);
-        setRoomState({
-          roomId: data.gameId,
-          playerNumber: data.playerNumber,
-          opponentJoined: data.playerNumber === 2, // If we're P2, P1 is already there
-          isReady: false,
-          opponentReady: false
-        });
-        setStatus('IN_ROOM');
-
-        // Update room in database
-        if (data.playerNumber === 2) {
-          supabase
-            .from('game_rooms')
-            .update({ player_count: 2, status: 'IN_PROGRESS' })
-            .eq('id', data.gameId);
-        }
-      });
-
+      // Join the room via socket (listener is already set up in useEffect)
+      console.log('Joining room via socket:', roomId);
       const response = await socketService.joinGame(roomId);
 
       if (response.status !== 'ok') {
