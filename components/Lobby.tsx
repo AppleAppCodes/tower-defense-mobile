@@ -25,6 +25,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [onlineCount, setOnlineCount] = useState(0);
+  const [searchingRoomId, setSearchingRoomId] = useState<string | null>(null);
+  const [searchingStatus, setSearchingStatus] = useState('');
 
   // Connect socket and setup listeners EARLY (before joining room)
   useEffect(() => {
@@ -50,21 +52,55 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
     fetchOnlineCount();
     const countInterval = setInterval(fetchOnlineCount, 10000);
 
-    // Setup ALL socket listeners early - they use refs to access current state
-    socketService.onOpponentJoined(() => {
-      console.log('Opponent joined!');
-      setRoomState(prev => prev ? { ...prev, opponentJoined: true } : null);
-    });
+    // Wait for socket to be ready, then setup ALL listeners
+    const setupListeners = () => {
+      if (!socketService.socket) {
+        setTimeout(setupListeners, 100);
+        return;
+      }
 
-    socketService.socket?.on('opponent_ready', () => {
-      console.log('Opponent is ready!');
-      setRoomState(prev => prev ? { ...prev, opponentReady: true } : null);
-    });
+      console.log('Setting up socket listeners...');
 
-    socketService.onOpponentDisconnected(() => {
-      console.log('Opponent disconnected!');
-      setRoomState(prev => prev ? { ...prev, opponentJoined: false, opponentReady: false } : null);
-    });
+      // CRITICAL: Setup match_found listener early!
+      socketService.onMatchFound((data) => {
+        console.log('Match found event received:', data);
+        setSearchingRoomId(null);
+        setSearchingStatus('');
+        setRoomState({
+          roomId: data.gameId,
+          playerNumber: data.playerNumber,
+          opponentJoined: data.playerNumber === 2, // If we're P2, P1 is already there
+          isReady: false,
+          opponentReady: false
+        });
+        setStatus('IN_ROOM');
+
+        // Update room in database
+        if (data.playerNumber === 2) {
+          supabase
+            .from('game_rooms')
+            .update({ player_count: 2, status: 'IN_PROGRESS' })
+            .eq('id', data.gameId);
+        }
+      });
+
+      socketService.onOpponentJoined(() => {
+        console.log('Opponent joined!');
+        setRoomState(prev => prev ? { ...prev, opponentJoined: true } : null);
+      });
+
+      socketService.socket?.on('opponent_ready', () => {
+        console.log('Opponent is ready!');
+        setRoomState(prev => prev ? { ...prev, opponentReady: true } : null);
+      });
+
+      socketService.onOpponentDisconnected(() => {
+        console.log('Opponent disconnected!');
+        setRoomState(prev => prev ? { ...prev, opponentJoined: false, opponentReady: false } : null);
+      });
+    };
+
+    setupListeners();
 
     return () => {
       clearInterval(checkConnection);
@@ -94,27 +130,60 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
 
     setStatus('SEARCHING');
     setErrorMessage('');
+    setSearchingStatus('Suche Räume...');
 
     try {
-      // First, try to find an open room
-      const { data: openRooms } = await supabase
+      // First, clean up stale rooms (older than 5 minutes)
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      await supabase
+        .from('game_rooms')
+        .delete()
+        .eq('status', 'WAITING')
+        .lt('created_at', fiveMinutesAgo);
+
+      // Try to find an open room
+      setSearchingStatus('Suche offene Räume...');
+      const { data: openRooms, error: queryError } = await supabase
         .from('game_rooms')
         .select('*')
         .eq('status', 'WAITING')
         .order('created_at', { ascending: true })
         .limit(1);
 
+      console.log('Open rooms query result:', openRooms, 'error:', queryError);
+
       let roomId: string;
       let isHost = false;
 
       if (openRooms && openRooms.length > 0) {
-        // Join existing room
+        // Join existing room - immediately mark it to prevent race condition
         roomId = openRooms[0].id;
+        setSearchingRoomId(roomId);
+        setSearchingStatus(`Trete Raum ${roomId} bei...`);
         console.log('Joining existing room:', roomId);
+
+        // Try to claim the room by updating status
+        const { error: claimError } = await supabase
+          .from('game_rooms')
+          .update({ status: 'JOINING', player_count: 2 })
+          .eq('id', roomId)
+          .eq('status', 'WAITING'); // Only if still WAITING
+
+        if (claimError) {
+          console.log('Failed to claim room, creating new one');
+          // Room was claimed by someone else, create our own
+          isHost = true;
+          roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
       } else {
         // Create new room
         roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
         isHost = true;
+      }
+
+      if (isHost) {
+        setSearchingRoomId(roomId);
+        setSearchingStatus(`Erstelle Raum ${roomId}...`);
 
         const { error: insertError } = await supabase
           .from('game_rooms')
@@ -126,45 +195,34 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
             max_players: 2
           });
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw insertError;
+        }
         console.log('Created new room:', roomId);
       }
 
-      // Setup match found listener
-      socketService.onMatchFound((data) => {
-        console.log('Match found:', data);
-        setRoomState({
-          roomId: data.gameId,
-          playerNumber: data.playerNumber,
-          opponentJoined: data.playerNumber === 2, // If we're P2, P1 is already there
-          isReady: false,
-          opponentReady: false
-        });
-        setStatus('IN_ROOM');
-
-        // Update room in database
-        if (data.playerNumber === 2) {
-          supabase
-            .from('game_rooms')
-            .update({ player_count: 2, status: 'IN_PROGRESS' })
-            .eq('id', data.gameId);
-        }
-      });
-
+      // Join the room via socket (listener is already set up in useEffect)
+      setSearchingStatus(`Verbinde mit ${roomId}...`);
+      console.log('Joining room via socket:', roomId);
       const response = await socketService.joinGame(roomId);
+      console.log('Socket join response:', response);
 
       if (response.status !== 'ok') {
-        // If join failed, try again by creating a new room
-        if (!isHost) {
-          return handleQuickMatch();
+        // If join failed, clean up and show error
+        if (isHost) {
+          await supabase.from('game_rooms').delete().eq('id', roomId);
         }
         throw new Error(response.message || 'Failed to join room');
       }
 
+      setSearchingStatus(`Warte in Raum ${roomId}...`);
+
     } catch (e) {
       console.error('Quick match error:', e);
-      setErrorMessage("Matchmaking fehlgeschlagen. Versuche es erneut.");
+      setErrorMessage(`Matchmaking fehlgeschlagen: ${e}`);
       setStatus('ERROR');
+      setSearchingRoomId(null);
     }
   }, [isConnected]);
 
@@ -206,10 +264,17 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
             </div>
             <div className="text-center">
               <h3 className="text-xl font-bold text-white mb-2">Suche Gegner...</h3>
-              <p className="text-slate-400 text-sm">Bitte warten</p>
+              <p className="text-slate-400 text-sm">{searchingStatus || 'Bitte warten'}</p>
+              {searchingRoomId && (
+                <p className="text-blue-400 text-xs mt-2 font-mono">Raum: {searchingRoomId}</p>
+              )}
             </div>
             <button
-              onClick={() => setStatus('IDLE')}
+              onClick={() => {
+                setStatus('IDLE');
+                setSearchingRoomId(null);
+                setSearchingStatus('');
+              }}
               className="text-red-400 text-sm hover:underline"
             >
               Abbrechen
