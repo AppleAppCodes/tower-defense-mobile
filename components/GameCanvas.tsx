@@ -252,6 +252,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   const [countdown, setCountdown] = useState<number | null>(null);
   const [waitingForOpponent, setWaitingForOpponent] = useState(false);
   const [gameResult, setGameResult] = useState<'won' | 'lost' | null>(null);
+  const gameStartTimeRef = useRef<number | null>(null);
 
   const triggerHaptic = (style: 'light' | 'medium' | 'error' | 'success') => {
     if (window.Telegram?.WebApp?.HapticFeedback) {
@@ -291,18 +292,40 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     if (!onlineGameId || initialMode !== 'PVP_ONLINE') return;
 
     // Game starts when both players are ready
-    socketService.onGameStart(({ waveData }) => {
-      console.log('Game starting with synced wave:', waveData);
+    const startGameWithWave = (waveData?: WaveData) => {
+      if (gameStartTimeRef.current !== null) return;
+      gameStartTimeRef.current = Date.now();
       setWaitingForOpponent(false);
       gameStateRef.current.isPlaying = true;
-      gameStateRef.current.wave = waveData.wave;
-      spawnQueueRef.current = [...waveData.enemies];
+      if (waveData) {
+        gameStateRef.current.wave = waveData.wave;
+        spawnQueueRef.current = [...waveData.enemies];
+      } else {
+        spawnQueueRef.current = generateWaveEnemies(1);
+      }
       waveFinishedRef.current = false;
       audioService.playWaveStart(gameStateRef.current.era);
-      setNotification({ title: "WAVE " + waveData.wave, subtitle: "ENEMIES INCOMING!", color: "text-yellow-400" });
+      setNotification({ title: "WAVE 1", subtitle: "ENEMIES INCOMING!", color: "text-yellow-400" });
       setTimeout(() => setNotification(null), 2000);
       setUiState({ ...gameStateRef.current });
+    };
+
+    socketService.onGameStart(({ waveData }) => {
+      console.log('Game starting with synced wave:', waveData);
+      startGameWithWave(waveData);
     });
+
+    socketService.onOpponentJoined(() => {
+      console.log('Opponent joined, starting game');
+      startGameWithWave();
+    });
+
+    const startGameTimeout = setTimeout(() => {
+      if (waitingForOpponent && gameStartTimeRef.current === null) {
+        console.log('Timeout waiting for opponent event, starting game anyway');
+        startGameWithWave();
+      }
+    }, 3000);
 
     // Receive next wave sync
     socketService.onWaveSync((waveData) => {
@@ -340,7 +363,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
       setUiState({ ...gameStateRef.current });
     });
 
-  }, [onlineGameId, initialMode]);
+    return () => clearTimeout(startGameTimeout);
+  }, [onlineGameId, initialMode, waitingForOpponent]);
 
   // Initialize Game Logic
   const initializeGame = useCallback(() => {
