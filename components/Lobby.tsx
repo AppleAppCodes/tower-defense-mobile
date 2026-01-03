@@ -26,7 +26,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [onlineCount, setOnlineCount] = useState(0);
 
-  // Connect socket and setup listeners
+  // Connect socket and setup listeners EARLY (before joining room)
   useEffect(() => {
     socketService.connect();
 
@@ -50,42 +50,39 @@ export const Lobby: React.FC<LobbyProps> = ({ onBack, onMatchFound }) => {
     fetchOnlineCount();
     const countInterval = setInterval(fetchOnlineCount, 10000);
 
+    // Setup ALL socket listeners early - they use refs to access current state
+    socketService.onOpponentJoined(() => {
+      console.log('Opponent joined!');
+      setRoomState(prev => prev ? { ...prev, opponentJoined: true } : null);
+    });
+
+    socketService.socket?.on('opponent_ready', () => {
+      console.log('Opponent is ready!');
+      setRoomState(prev => prev ? { ...prev, opponentReady: true } : null);
+    });
+
+    socketService.onOpponentDisconnected(() => {
+      console.log('Opponent disconnected!');
+      setRoomState(prev => prev ? { ...prev, opponentJoined: false, opponentReady: false } : null);
+    });
+
     return () => {
       clearInterval(checkConnection);
       clearInterval(countInterval);
     };
   }, []);
 
-  // Setup socket event listeners when in room
+  // Setup game_start listener - needs roomState for onMatchFound callback
   useEffect(() => {
     if (!roomState) return;
-
-    // Opponent joined the room
-    socketService.onOpponentJoined(() => {
-      console.log('Opponent joined!');
-      setRoomState(prev => prev ? { ...prev, opponentJoined: true } : null);
-    });
 
     // Game starts (both ready) - pass waveData to GameCanvas
     socketService.onGameStart((data) => {
       console.log('Game starting with wave data:', data);
-      if (roomState) {
-        onMatchFound(roomState.playerNumber, roomState.roomId, data.waveData);
-      }
+      onMatchFound(roomState.playerNumber, roomState.roomId, data.waveData);
     });
 
-    // Listen for opponent ready status
-    socketService.socket?.on('opponent_ready', () => {
-      console.log('Opponent is ready!');
-      setRoomState(prev => prev ? { ...prev, opponentReady: true } : null);
-    });
-
-    // Opponent disconnected
-    socketService.onOpponentDisconnected(() => {
-      setRoomState(prev => prev ? { ...prev, opponentJoined: false, opponentReady: false } : null);
-    });
-
-  }, [roomState?.roomId, onMatchFound]);
+  }, [roomState, onMatchFound]);
 
   // Quick Match - Find or create a room
   const handleQuickMatch = useCallback(async () => {
