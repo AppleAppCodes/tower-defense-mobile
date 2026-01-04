@@ -242,11 +242,12 @@ export const UNIT_TYPES: Record<string, UnitConfig> = {
     }
 };
 
+// HARDER DIFFICULTY: Increased HP for all enemies
 export const ENEMY_STATS: Record<EnemyType, { maxHp: number; speed: number; reward: number; expReward: number; color: string; radius: number }> = {
-  [EnemyType.NORMAL]: { maxHp: 80, speed: 1.0, reward: 10, expReward: 15, color: '#94a3b8', radius: 16 }, 
-  [EnemyType.FAST]: { maxHp: 40, speed: 2.0, reward: 15, expReward: 10, color: '#a3e635', radius: 12 },   
-  [EnemyType.TANK]: { maxHp: 300, speed: 0.6, reward: 35, expReward: 50, color: '#475569', radius: 24 },   
-  [EnemyType.BOSS]: { maxHp: 3000, speed: 0.4, reward: 250, expReward: 500, color: '#ef4444', radius: 36 }, 
+  [EnemyType.NORMAL]: { maxHp: 120, speed: 1.2, reward: 10, expReward: 15, color: '#94a3b8', radius: 16 },  // Was 80 HP, 1.0 speed
+  [EnemyType.FAST]: { maxHp: 60, speed: 2.5, reward: 15, expReward: 10, color: '#a3e635', radius: 12 },    // Was 40 HP, 2.0 speed
+  [EnemyType.TANK]: { maxHp: 500, speed: 0.7, reward: 35, expReward: 50, color: '#475569', radius: 24 },   // Was 300 HP
+  [EnemyType.BOSS]: { maxHp: 5000, speed: 0.5, reward: 250, expReward: 500, color: '#ef4444', radius: 36 }, // Was 3000 HP
 };
 
 export const PERK_STATS: Record<PerkType, { color: string; duration: number; icon: string, name: string }> = {

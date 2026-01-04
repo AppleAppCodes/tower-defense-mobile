@@ -140,6 +140,14 @@ class SocketService {
     });
   }
 
+  onWaveCountdown(callback: (data: { seconds: number; nextWave: number }) => void) {
+    this.socket?.off('wave_countdown');
+    this.socket?.on('wave_countdown', (data: any) => {
+      console.log('Wave countdown:', data);
+      callback(data);
+    });
+  }
+
   onOpponentState(callback: (state: OpponentState) => void) {
     this.socket?.off('opponent_state');
     this.socket?.on('opponent_state', callback);

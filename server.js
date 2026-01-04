@@ -30,24 +30,30 @@ const EnemyType = {
 };
 
 // Generate wave enemies (same logic as client, but on server for sync)
+// HARDER DIFFICULTY: More enemies, faster scaling
 function generateWaveEnemies(wave) {
-  const baseCount = 5 + Math.floor(wave * 2);
+  const baseCount = 8 + Math.floor(wave * 3); // Was: 5 + wave*2, now: 8 + wave*3
   const queue = [];
 
   if (wave % 5 === 0) {
-    // Boss wave
+    // Boss wave - now with more support enemies
     queue.push({ type: EnemyType.BOSS, delay: 0 });
-    for (let i = 0; i < 5; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
+    for (let i = 0; i < 3; i++) queue.push({ type: EnemyType.TANK, delay: 60 });
+    for (let i = 0; i < 8; i++) queue.push({ type: EnemyType.NORMAL, delay: 30 });
   } else if (wave % 3 === 0) {
-    // Tank wave
-    for (let i = 0; i < 3; i++) queue.push({ type: EnemyType.TANK, delay: i === 0 ? 0 : 80 });
-    for (let i = 0; i < baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
+    // Tank wave - more tanks
+    for (let i = 0; i < 4 + Math.floor(wave / 3); i++) queue.push({ type: EnemyType.TANK, delay: i === 0 ? 0 : 60 });
+    for (let i = 0; i < baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: 25 });
   } else if (wave % 2 === 0) {
-    // Fast wave
-    for (let i = 0; i < baseCount + 5; i++) queue.push({ type: EnemyType.FAST, delay: i === 0 ? 0 : 20 });
+    // Fast wave - bigger swarm
+    for (let i = 0; i < baseCount + 8; i++) queue.push({ type: EnemyType.FAST, delay: i === 0 ? 0 : 12 });
   } else {
-    // Normal wave
-    for (let i = 0; i < baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: i === 0 ? 0 : 35 });
+    // Normal wave - more enemies, faster spawn
+    for (let i = 0; i < baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: i === 0 ? 0 : 25 });
+    // Add some fast enemies mixed in
+    if (wave >= 2) {
+      for (let i = 0; i < Math.floor(wave / 2); i++) queue.push({ type: EnemyType.FAST, delay: 15 });
+    }
   }
   return queue;
 }
@@ -222,19 +228,33 @@ io.on("connection", (socket) => {
 
     console.log(`Player ${socket.id} finished wave ${room.wave}. Waiting: ${room.waveFinished.size}/2`);
 
-    // When both finished, sync next wave
-    if (room.waveFinished.size === 2) {
-      room.wave++;
-      room.waveFinished.clear();
+    // When both finished, wait 10 seconds then sync next wave
+    if (room.waveFinished.size === 2 && !room.waveTimerActive) {
+      room.waveTimerActive = true;
+      const nextWave = room.wave + 1;
 
-      const waveData = {
-        wave: room.wave,
-        enemies: generateWaveEnemies(room.wave),
-        seed: Date.now()
-      };
+      // Notify players that next wave is coming in 10 seconds
+      io.to(gameId).emit("wave_countdown", { seconds: 10, nextWave });
 
-      console.log(`Syncing wave ${room.wave} to room ${gameId}`);
-      io.to(gameId).emit("wave_sync", waveData);
+      console.log(`Starting 10 second countdown for wave ${nextWave} in room ${gameId}`);
+
+      setTimeout(() => {
+        // Check if room still exists (players might have left)
+        if (!rooms[gameId]) return;
+
+        room.wave = nextWave;
+        room.waveFinished.clear();
+        room.waveTimerActive = false;
+
+        const waveData = {
+          wave: room.wave,
+          enemies: generateWaveEnemies(room.wave),
+          seed: Date.now()
+        };
+
+        console.log(`Syncing wave ${room.wave} to room ${gameId}`);
+        io.to(gameId).emit("wave_sync", waveData);
+      }, 10000); // 10 seconds delay
     }
   });
 

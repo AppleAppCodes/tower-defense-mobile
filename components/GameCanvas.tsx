@@ -50,20 +50,30 @@ const createNoisePattern = (ctx: CanvasRenderingContext2D, color: string) => {
 };
 
 // Local wave generation (for solo mode only)
+// HARDER DIFFICULTY: More enemies, faster scaling
 const generateWaveEnemies = (wave: number) => {
-    const baseCount = 5 + Math.floor(wave * 2);
+    const baseCount = 8 + Math.floor(wave * 3); // Was: 5 + wave*2
     const queue: { type: EnemyType; delay: number }[] = [];
 
     if (wave % 5 === 0) {
+        // Boss wave - now with support enemies
         queue.push({ type: EnemyType.BOSS, delay: 0 });
-        for(let i=0; i<5; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
+        for(let i=0; i<3; i++) queue.push({ type: EnemyType.TANK, delay: 60 });
+        for(let i=0; i<8; i++) queue.push({ type: EnemyType.NORMAL, delay: 30 });
     } else if (wave % 3 === 0) {
-        for(let i=0; i<3; i++) queue.push({ type: EnemyType.TANK, delay: i === 0 ? 0 : 80 });
-        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: 40 });
+        // Tank wave - more tanks
+        for(let i=0; i<4 + Math.floor(wave/3); i++) queue.push({ type: EnemyType.TANK, delay: i === 0 ? 0 : 60 });
+        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: 25 });
     } else if (wave % 2 === 0) {
-        for(let i=0; i<baseCount + 5; i++) queue.push({ type: EnemyType.FAST, delay: i === 0 ? 0 : 20 });
+        // Fast wave - bigger swarm
+        for(let i=0; i<baseCount + 8; i++) queue.push({ type: EnemyType.FAST, delay: i === 0 ? 0 : 12 });
     } else {
-        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: i === 0 ? 0 : 35 });
+        // Normal wave - more enemies, faster spawn
+        for(let i=0; i<baseCount; i++) queue.push({ type: EnemyType.NORMAL, delay: i === 0 ? 0 : 25 });
+        // Add some fast enemies mixed in
+        if (wave >= 2) {
+            for(let i=0; i<Math.floor(wave/2); i++) queue.push({ type: EnemyType.FAST, delay: 15 });
+        }
     }
     return queue;
 };
@@ -337,6 +347,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         startGameWithWave();
       }
     }, 3000);
+
+    // Receive wave countdown (10 second delay between waves)
+    socketService.onWaveCountdown(({ seconds, nextWave }) => {
+      console.log(`Next wave ${nextWave} in ${seconds} seconds`);
+      setNotification({ title: `WAVE ${nextWave}`, subtitle: `STARTING IN ${seconds}s - BUILD NOW!`, color: "text-blue-400" });
+
+      // Start countdown timer
+      let remaining = seconds;
+      const countdownInterval = setInterval(() => {
+        remaining--;
+        if (remaining > 0) {
+          setNotification({ title: `WAVE ${nextWave}`, subtitle: `STARTING IN ${remaining}s`, color: "text-blue-400" });
+        } else {
+          clearInterval(countdownInterval);
+        }
+      }, 1000);
+    });
 
     // Receive next wave sync
     socketService.onWaveSync((waveData) => {
