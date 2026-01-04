@@ -274,14 +274,36 @@ const drawProjectile = (ctx: CanvasRenderingContext2D, proj: Projectile, era: nu
     ctx.restore();
 };
 
+// Fallback emoji icons if PNG not loaded
+const TOWER_EMOJI_FALLBACK: Record<number, Partial<Record<TowerType, string>>> = {
+    0: { [TowerType.BASIC]: "🪃", [TowerType.RAPID]: "🏹", [TowerType.SNIPER]: "🔱", [TowerType.AOE]: "🪨" },
+    1: { [TowerType.BASIC]: "🏰", [TowerType.RAPID]: "🤺", [TowerType.SNIPER]: "🎯", [TowerType.AOE]: "💣", [TowerType.LASER]: "🔮", [TowerType.FROST]: "❄️" },
+    2: { [TowerType.BASIC]: "🔫", [TowerType.RAPID]: "⚙️", [TowerType.SNIPER]: "🎯", [TowerType.AOE]: "💥", [TowerType.LASER]: "⚡", [TowerType.FROST]: "🧊", [TowerType.SHOCK]: "⚡", [TowerType.MISSILE]: "🚀" }
+};
+
 const TowerIcon = ({ type, era }: { type: TowerType; era: number }) => {
-    const iconMap: Record<number, Partial<Record<TowerType, string>>> = {
-        0: { [TowerType.BASIC]: "🪃", [TowerType.RAPID]: "🏹", [TowerType.SNIPER]: "🔱", [TowerType.AOE]: "🪨" },
-        1: { [TowerType.BASIC]: "🏰", [TowerType.RAPID]: "🤺", [TowerType.SNIPER]: "🎯", [TowerType.AOE]: "💣", [TowerType.LASER]: "🔮", [TowerType.FROST]: "❄️" },
-        2: { [TowerType.BASIC]: "🔫", [TowerType.RAPID]: "⚙️", [TowerType.SNIPER]: "🎯", [TowerType.AOE]: "💥", [TowerType.LASER]: "⚡", [TowerType.FROST]: "🧊", [TowerType.SHOCK]: "⚡", [TowerType.MISSILE]: "🚀" }
-    };
-    const icon = iconMap[era]?.[type] || "🗼";
+    const imageKey = getTowerImageKey(era, type);
+    const img = towerImages.get(imageKey);
+    const hasImage = img && img.complete && img.naturalWidth > 0;
+
     const bgColors = ['bg-amber-900/60', 'bg-slate-600/60', 'bg-slate-800/60'];
+
+    if (hasImage) {
+        // Use the PNG image for the shop icon
+        return (
+            <div className={`w-full h-full ${bgColors[era]} rounded-lg flex items-center justify-center shadow-inner border border-white/10 overflow-hidden`}>
+                <img
+                    src={img.src}
+                    alt={type}
+                    className="w-9 h-9 object-contain"
+                    style={{ imageRendering: 'auto' }}
+                />
+            </div>
+        );
+    }
+
+    // Fallback to emoji
+    const icon = TOWER_EMOJI_FALLBACK[era]?.[type] || "🗼";
     return <div className={`w-full h-full ${bgColors[era]} rounded-lg flex items-center justify-center text-2xl shadow-inner border border-white/10`}>{icon}</div>;
 };
 
@@ -357,10 +379,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     }
   };
 
-  // Resize Handler
+  // Device pixel ratio for high-DPI displays
+  const dprRef = useRef<number>(typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1);
+
+  // Resize Handler with high-DPI support
   useEffect(() => {
-    const handleResize = () => { if (containerRef.current) setCanvasDimensions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight }); };
-    handleResize(); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize);
+    const handleResize = () => {
+      if (containerRef.current) {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2); // Cap at 2x for performance
+        dprRef.current = dpr;
+        setCanvasDimensions({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight
+        });
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Background Init
@@ -991,10 +1027,31 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
   const draw = useCallback(() => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext('2d'); if (!ctx) return;
+    const dpr = dprRef.current;
     const { scale, offsetX, offsetY } = calculateTransform();
 
+    // Set canvas resolution for high-DPI displays (only when dimensions change)
+    const displayWidth = canvasDimensions.width;
+    const displayHeight = canvasDimensions.height;
+    const targetWidth = Math.floor(displayWidth * dpr);
+    const targetHeight = Math.floor(displayHeight * dpr);
+
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      canvas.style.width = displayWidth + 'px';
+      canvas.style.height = displayHeight + 'px';
+    }
+
+    // Reset transform and apply DPR scaling each frame
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Enable high-quality image rendering (prevents pixelation)
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
     // Clear canvas
-    ctx.fillStyle = THEMES[0].background; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = THEMES[0].background; ctx.fillRect(0, 0, displayWidth, displayHeight);
 
     // Use REF for condition check - avoid React state dependency for smooth rendering
     const currentOpponentState = opponentStateRef.current;
