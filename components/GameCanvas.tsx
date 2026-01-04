@@ -17,6 +17,7 @@ interface GameCanvasProps {
 // --- CONSTANTS ---
 const BUILD_PHASE_DURATION = 600; // 10 Seconds (60fps)
 const STATE_SYNC_INTERVAL = 3; // Send state every 3 frames for smooth spectating
+const ERA_UPGRADE_COST = 1000; // Gold required to advance to next era
 
 // --- HELPER FUNCTIONS ---
 const isPointOnPath = (x: number, y: number, width: number, waypoints: Vector2D[]) => {
@@ -1123,8 +1124,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
   const handleEvolve = useCallback(() => {
     const state = gameStateRef.current;
-    if (state.era < 2 && state.exp >= state.maxExp) {
+    // Requires full XP AND 1000 gold to advance era
+    if (state.era < 2 && state.exp >= state.maxExp && state.money >= ERA_UPGRADE_COST) {
         state.exp -= state.maxExp;
+        state.money -= ERA_UPGRADE_COST; // Deduct gold cost
         state.era++;
         if (ERA_DATA[state.era]) state.maxExp = ERA_DATA[state.era].maxExp;
         triggerHaptic('success');
@@ -1132,6 +1135,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
         setNotification({ title: `${ERA_DATA[state.era].name}`, subtitle: "NEW TECHNOLOGY UNLOCKED", color: "text-yellow-400" });
         setTimeout(() => setNotification(null), 3000);
         setUiState({ ...state });
+    } else if (state.era < 2 && state.exp >= state.maxExp && state.money < ERA_UPGRADE_COST) {
+        // Not enough gold - show warning
+        triggerHaptic('error');
+        setNotification({ title: "NOT ENOUGH GOLD", subtitle: `Need $${ERA_UPGRADE_COST} to evolve`, color: "text-red-400" });
+        setTimeout(() => setNotification(null), 2000);
     }
   }, []);
 
@@ -1161,7 +1169,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
 
   // --- JSX RENDER ---
-  const canEvolve = uiState.era < 2 && uiState.exp >= uiState.maxExp;
+  const hasFullXp = uiState.era < 2 && uiState.exp >= uiState.maxExp;
+  const canAffordEvolve = uiState.money >= ERA_UPGRADE_COST;
+  const canEvolve = hasFullXp; // Show button when XP is full (even if can't afford)
 
   return (
     <div className="flex flex-col gap-2 w-full h-full overflow-hidden box-border bg-[#1c1917]">
@@ -1209,9 +1219,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
 
                     <div className="flex items-center gap-2 pointer-events-auto">
                         {canEvolve && (
-                            <button onClick={handleEvolve} className="flex items-center gap-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 px-3 py-1.5 rounded-lg border border-yellow-300 shadow-[0_0_12px_rgba(234,179,8,0.5)] animate-pulse active:scale-95 transition-all">
-                                <ArrowUpCircle size={14} className="text-yellow-900" />
-                                <span className="text-yellow-900 font-bold text-xs">EVOLVE</span>
+                            <button
+                                onClick={handleEvolve}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border active:scale-95 transition-all ${
+                                    canAffordEvolve
+                                        ? 'bg-gradient-to-r from-yellow-500 to-amber-500 border-yellow-300 shadow-[0_0_12px_rgba(234,179,8,0.5)] animate-pulse'
+                                        : 'bg-gradient-to-r from-gray-600 to-gray-700 border-gray-500'
+                                }`}
+                            >
+                                <ArrowUpCircle size={14} className={canAffordEvolve ? "text-yellow-900" : "text-gray-300"} />
+                                <span className={`font-bold text-xs ${canAffordEvolve ? "text-yellow-900" : "text-gray-300"}`}>
+                                    EVOLVE ${ERA_UPGRADE_COST}
+                                </span>
                             </button>
                         )}
                         {initialMode === 'DEFENSE' && (
