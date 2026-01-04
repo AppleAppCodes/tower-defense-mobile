@@ -78,12 +78,57 @@ const generateWaveEnemies = (wave: number) => {
     return queue;
 };
 
+// --- TOWER IMAGES ---
+// Cache for loaded tower images
+const towerImages: Map<string, HTMLImageElement> = new Map();
+let towerImagesLoaded = false;
+
+// Load tower images on startup
+const loadTowerImages = () => {
+  if (towerImagesLoaded) return;
+
+  const imagesToLoad = [
+    { key: 'stone_basic', src: '/assets/towers/stone_basic.png' },
+    // Add more tower images here as needed
+  ];
+
+  imagesToLoad.forEach(({ key, src }) => {
+    const img = new Image();
+    img.onload = () => {
+      towerImages.set(key, img);
+      console.log(`Tower image loaded: ${key}`);
+    };
+    img.onerror = () => {
+      console.warn(`Failed to load tower image: ${src}`);
+    };
+    img.src = src;
+  });
+
+  towerImagesLoaded = true;
+};
+
+// Initialize image loading
+loadTowerImages();
+
 // --- DRAWING ---
 const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gameTime: number) => {
   ctx.save();
   const timeSinceShot = gameTime - tower.lastShotFrame;
   let recoil = 0; if (timeSinceShot < 10) recoil = (10 - timeSinceShot) * 0.5;
 
+  // Check if we have a custom image for this tower
+  if (era === 0 && tower.type === TowerType.BASIC) {
+    const img = towerImages.get('stone_basic');
+    if (img && img.complete) {
+      // Draw the custom PNG image
+      const size = 56; // Tower size in pixels
+      ctx.drawImage(img, -size/2, -size/2 - 8, size, size);
+      ctx.restore();
+      return;
+    }
+  }
+
+  // Fallback to procedural drawing if no image
   // Base
   ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(0, 8, 14, 6, 0, 0, Math.PI*2); ctx.fill();
 
