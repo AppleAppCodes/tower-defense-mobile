@@ -84,28 +84,58 @@ const generateWaveEnemies = (wave: number) => {
 const towerImages: Map<string, HTMLImageElement> = new Map();
 let towerImagesLoaded = false;
 
+// Tower image configuration - add all tower types here
+// Format: era_towertype (e.g., stone_basic, castle_rapid, imperial_sniper)
+const TOWER_IMAGE_CONFIG = [
+  // Stone Age (Era 0)
+  { key: 'stone_basic', src: '/assets/towers/stone_basic.png', era: 0, type: TowerType.BASIC },
+  { key: 'stone_rapid', src: '/assets/towers/stone_rapid.png', era: 0, type: TowerType.RAPID },
+  { key: 'stone_sniper', src: '/assets/towers/stone_sniper.png', era: 0, type: TowerType.SNIPER },
+  { key: 'stone_aoe', src: '/assets/towers/stone_aoe.png', era: 0, type: TowerType.AOE },
+  // Castle Age (Era 1)
+  { key: 'castle_basic', src: '/assets/towers/castle_basic.png', era: 1, type: TowerType.BASIC },
+  { key: 'castle_rapid', src: '/assets/towers/castle_rapid.png', era: 1, type: TowerType.RAPID },
+  { key: 'castle_sniper', src: '/assets/towers/castle_sniper.png', era: 1, type: TowerType.SNIPER },
+  { key: 'castle_aoe', src: '/assets/towers/castle_aoe.png', era: 1, type: TowerType.AOE },
+  { key: 'castle_laser', src: '/assets/towers/castle_laser.png', era: 1, type: TowerType.LASER },
+  { key: 'castle_frost', src: '/assets/towers/castle_frost.png', era: 1, type: TowerType.FROST },
+  // Imperial Age (Era 2)
+  { key: 'imperial_basic', src: '/assets/towers/imperial_basic.png', era: 2, type: TowerType.BASIC },
+  { key: 'imperial_rapid', src: '/assets/towers/imperial_rapid.png', era: 2, type: TowerType.RAPID },
+  { key: 'imperial_sniper', src: '/assets/towers/imperial_sniper.png', era: 2, type: TowerType.SNIPER },
+  { key: 'imperial_aoe', src: '/assets/towers/imperial_aoe.png', era: 2, type: TowerType.AOE },
+  { key: 'imperial_laser', src: '/assets/towers/imperial_laser.png', era: 2, type: TowerType.LASER },
+  { key: 'imperial_frost', src: '/assets/towers/imperial_frost.png', era: 2, type: TowerType.FROST },
+  { key: 'imperial_shock', src: '/assets/towers/imperial_shock.png', era: 2, type: TowerType.SHOCK },
+  { key: 'imperial_missile', src: '/assets/towers/imperial_missile.png', era: 2, type: TowerType.MISSILE },
+];
+
+// Tower image size in pixels (bigger = more visible)
+const TOWER_IMAGE_SIZE = 70; // Increased from 56
+
 // Load tower images on startup
 const loadTowerImages = () => {
   if (towerImagesLoaded) return;
 
-  const imagesToLoad = [
-    { key: 'stone_basic', src: '/assets/towers/stone_basic.png' },
-    // Add more tower images here as needed
-  ];
-
-  imagesToLoad.forEach(({ key, src }) => {
+  TOWER_IMAGE_CONFIG.forEach(({ key, src }) => {
     const img = new Image();
     img.onload = () => {
       towerImages.set(key, img);
       console.log(`Tower image loaded: ${key}`);
     };
     img.onerror = () => {
-      console.warn(`Failed to load tower image: ${src}`);
+      // Silent fail - will use procedural fallback
     };
     img.src = src;
   });
 
   towerImagesLoaded = true;
+};
+
+// Helper to get tower image key
+const getTowerImageKey = (era: number, type: TowerType): string => {
+  const eraNames = ['stone', 'castle', 'imperial'];
+  return `${eraNames[era]}_${type.toLowerCase()}`;
 };
 
 // Initialize image loading
@@ -117,16 +147,15 @@ const drawTower = (ctx: CanvasRenderingContext2D, tower: Tower, era: number, gam
   const timeSinceShot = gameTime - tower.lastShotFrame;
   let recoil = 0; if (timeSinceShot < 10) recoil = (10 - timeSinceShot) * 0.5;
 
-  // Check if we have a custom image for this tower
-  if (era === 0 && tower.type === TowerType.BASIC) {
-    const img = towerImages.get('stone_basic');
-    if (img && img.complete) {
-      // Draw the custom PNG image
-      const size = 56; // Tower size in pixels
-      ctx.drawImage(img, -size/2, -size/2 - 8, size, size);
-      ctx.restore();
-      return;
-    }
+  // Check if we have a custom image for this tower (any era, any type)
+  const imageKey = getTowerImageKey(era, tower.type);
+  const img = towerImages.get(imageKey);
+  if (img && img.complete) {
+    // Draw the custom PNG image (bigger size, centered)
+    const size = TOWER_IMAGE_SIZE;
+    ctx.drawImage(img, -size/2, -size/2 - 10, size, size);
+    ctx.restore();
+    return;
   }
 
   // Fallback to procedural drawing if no image
@@ -566,6 +595,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, initialMode = 'DEFE
     if (!state.isPlaying && !state.isGameOver && initialMode !== 'PVP_ONLINE') {
         state.isPlaying = true;
         state.autoStartTimer = -1;
+        waveFinishedRef.current = false; // CRITICAL: Reset this so wave completion can trigger again!
 
         const newEnemies = generateWaveEnemies(state.wave);
         spawnQueueRef.current = newEnemies;
